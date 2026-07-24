@@ -1,0 +1,30 @@
+{
+  "name": "taskflow-backend",
+  "version": "1.0.0",
+  "description": "Backend API for TaskFlow — a task and project management application.",
+  "main": "index.js",
+  "scripts": {
+    "dev": "ts-node-dev src/server.ts",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AbdulazizAyalew/taskflow-backend.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/AbdulazizAyalew/taskflow-backend/issues"
+  },
+  "homepage": "https://github.com/AbdulazizAyalew/taskflow-backend#readme",
+  "dependencies": {
+    "dotenv": "^17.4.2",
+    "ts-node-dev": "^2.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.1",
+    "typescript": "^5.6.3"
+  }
+}
