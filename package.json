@@ -4,7 +4,7 @@
   "description": "Backend API for TaskFlow — a task and project management application.",
   "main": "index.js",
   "scripts": {
-    "dev": "ts-node-dev src/index.ts",
+    "dev": "ts-node-dev src/server.ts",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {
