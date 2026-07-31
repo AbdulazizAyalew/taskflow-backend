@@ -4,7 +4,7 @@ import {LaptopsService} from './laptops.service';
 @Controller('laptops')
 export class LaptopsController {
 
-    // Inject 
+    // Injecting the service for the controller
     constructor(private readonly laptopsService: LaptopsService){}
 
     @Get()
