@@ -1,5 +1,6 @@
-import { Controller, Get } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post } from '@nestjs/common';
 import {LaptopsService} from './laptops.service';
+import { CreateLaptopDto } from './dto/create-laptop.dto';
 
 @Controller('laptops')
 export class LaptopsController {
@@ -9,6 +10,17 @@ export class LaptopsController {
 
     @Get()
     getLaptops(){
-        return this.laptopsService.loadLaptops('./src/datas/Laptops.json');
+        return this.laptopsService.loadLaptops();
+    }
+
+    @Get(':id')
+    getLaptopById(@Param('id') id: number){
+        return this.laptopsService.loadlaptopById(Number(id));
+    }
+
+    @Post()
+    createLaptop(@Body() newLaptop:CreateLaptopDto){
+        return this.laptopsService.createLaptop(newLaptop);
     }
 }
+
