@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable,NotFoundException } from '@nestjs/common';
 import { Laptop } from './interfaces/Laptops.interface';
 import { CreateLaptopDto } from './dto/create-laptop.dto';
 import { updateLaptopDto } from './dto/update-laptop.dto';
@@ -37,19 +37,12 @@ export class LaptopsService {
 
   // Finds a Laptop by ID
   async loadlaptopById(id): Promise<Laptop>{
-
     for (const laptop of this.laptopsdata) {
         if (laptop.id === id){
             return laptop;
         }
     }
-    return {
-      id: 404,
-      description: 'None',
-      brand: '404',
-      ram: 0,
-      price: 0,
-    };
+    throw new NotFoundException(`Laptop with ${id} Not Found!`);
     
   }
 
@@ -59,8 +52,8 @@ export class LaptopsService {
     return `Successfully added \n ${JSON.stringify(newLaptop,null,2)}`;
   }
 
-  async updateLaptopById(id:number,updatedLaptop):Promise<string>{
-        
+
+  async updateLaptopById(id:number,updatedLaptop:updateLaptopDto):Promise<string>{    
         const index = this.laptopsdata.findIndex((laptop) => laptop.id === id);
 
         if (index !== -1){
@@ -70,18 +63,17 @@ export class LaptopsService {
             };
             return `Successfully updated Laptop with id ${id} \n Updated Laptop = ${JSON.stringify(this.laptopsdata[index], null, 2)}`;
         }
-        return "404! Not Found";
+        throw new NotFoundException(`Laptop with ${id} not found`);
   }
 
-  public deleteLaptopById(id:number): string{
 
+  public deleteLaptopById(id:number): string{
     const index = this.laptopsdata.findIndex((laptop) => laptop.id === id);
-    
     if (index !== -1){
       this.laptopsdata.splice(index,1);
       return "Successfully deleted";
     }
-    return "404! Not Found";
+    throw new NotFoundException(`Laptop with ${id} not found`);
   }
 
 }
