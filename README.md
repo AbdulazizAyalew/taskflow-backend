@@ -8,11 +8,10 @@ This repository is a small NestJS API that currently exposes one feature area: l
 
 The app starts in [src/main.ts](src/main.ts), which creates the Nest application and listens on port 3000.
 
-The root application wiring lives in [src/app.module.ts](src/app.module.ts). That file imports only one feature module:
+The root application wiring lives in [src/app.module.ts](src/app.module.ts). That file imports two feature modules:
 
 - `LaptopsModule`
-
-That means the entire application currently routes through the laptop feature.
+- `UsersModule`
 
 ## How the pieces fit together
 
@@ -20,7 +19,7 @@ That means the entire application currently routes through the laptop feature.
 
 File: [src/app.module.ts](src/app.module.ts)
 
-`AppModule` is the root module. It does not contain business logic itself; it simply imports `LaptopsModule`.
+`AppModule` is the root module. It does not contain business logic itself; it simply imports `LaptopsModule` and `UsersModule`.
 
 ### 2. `LaptopsModule`
 
@@ -40,41 +39,18 @@ In plain terms, this module says:
 
 File: [src/laptops/laptops.controller.ts](src/laptops/laptops.controller.ts)
 
-This controller is the HTTP entry point. Its route is:
+This controller is the HTTP entry point. Its route is `@Controller('laptops')`. It handles GET, POST, PATCH, and DELETE requests and delegates them to the service.
 
-- `@Controller('laptops')`
-
-The method `getLaptops()` is mapped to `GET /laptops`, and it delegates to the service:
-
-```ts
-return this.laptopsService.loadLaptops('./src/datas/Laptops.json');
-```
-
-So the controller receives the request, then asks the service to read the laptop dataset.
 
 ### 4. `LaptopsService`
 
 File: [src/laptops/laptops.service.ts](src/laptops/laptops.service.ts)
 
-This service is the data-access layer for this project. It does not use a database or ORM.
+This service is the data-access layer for this project. It does not use a database or ORM. Currently, it holds the laptop data as a class-level, in-memory array (seeded with existing data).
 
-Instead, it:
+### 5. `UsersModule`
+Scaffolding for the `UsersModule` (Module, Controller, Service) is in place and registered in the `AppModule`. CRUD logic will be implemented in a future milestone.
 
-1. reads the file from `./src/datas/Laptops.json`
-2. parses the JSON string
-3. returns the array of laptop objects
-
-The actual seed data file is [src/datas/Laptops.json](src/datas/Laptops.json).
-
-## Runtime flow
-
-If you start the app, the request flow is:
-
-1. `src/main.ts` boots the Nest app
-2. `AppModule` imports `LaptopsModule`
-3. `LaptopsController` handles `GET /laptops`
-4. `LaptopsService` reads [src/datas/Laptops.json](src/datas/Laptops.json)
-5. the JSON array is returned to the client
 
 ## How to run the project
 
@@ -85,6 +61,7 @@ cd /home/jaedeen/Pitron/taskflow-backend
 npm install
 npm run start:dev
 ```
+
 
 The app starts on:
 
@@ -114,8 +91,33 @@ Example response:
 ]
 ```
 
+### Get laptop by ID
+
+```bash
+curl -X GET http://localhost:3000/laptops/1022
+```
+
+### Create a new laptop
+```bash
+curl -X POST http://localhost:3000/laptops \
+-H "Content-Type: application/json" \
+-d '{"id": 1025, "brand": "Dell XPS 15", "description": "Brand new Dell", "ram": 32, "price": 180000}'
+```
+
+### Update a laptop (PATCH)
+```bash
+curl -X PATCH http://localhost:3000/laptops/1022 \
+-H "Content-Type: application/json" \
+-d '{"price": 115000}'
+```
+
+### Delete a laptop
+```bash
+curl -X DELETE http://localhost:3000/laptops/1022
+```
+
+
 ## Notes
 
-- This project currently uses a static JSON file rather than a database.
-- The laptop endpoint is the only API surface implemented in the repo right now.
+- This project currently uses an in-memory array rather than a database.
 - The codebase is intentionally small, so the controller/service/module structure is easy to follow end-to-end.
