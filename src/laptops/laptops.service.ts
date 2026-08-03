@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { Laptop } from './interfaces/Laptops.interface';
 import { CreateLaptopDto } from './dto/create-laptop.dto';
+import { updateLaptopDto } from './dto/update-laptop.dto';
 
 @Injectable()
 export class LaptopsService {
@@ -56,5 +57,19 @@ export class LaptopsService {
   async createLaptop(newLaptop: CreateLaptopDto ): Promise<string>{
     this.laptopsdata.push(newLaptop);
     return `Successfully added \n ${JSON.stringify(newLaptop,null,2)}`;
+  }
+
+  async updateLaptopById(id:number,updatedLaptop):Promise<string>{
+        
+        const index = this.laptopsdata.findIndex((laptop) => laptop.id === id);
+
+        if (index !== -1){
+            this.laptopsdata[index] = {
+                ...this.laptopsdata[index],
+                ...updatedLaptop
+            };
+            return `Successfully updated Laptop with id ${id} \n Updated Laptop = ${JSON.stringify(this.laptopsdata[index], null, 2)}`;
+        }
+        return "Not Found";
   }
 }
