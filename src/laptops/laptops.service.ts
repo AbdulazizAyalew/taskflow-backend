@@ -70,6 +70,18 @@ export class LaptopsService {
             };
             return `Successfully updated Laptop with id ${id} \n Updated Laptop = ${JSON.stringify(this.laptopsdata[index], null, 2)}`;
         }
-        return "Not Found";
+        return "404! Not Found";
   }
+
+  public deleteLaptopById(id:number): string{
+
+    const index = this.laptopsdata.findIndex((laptop) => laptop.id === id);
+    
+    if (index !== -1){
+      this.laptopsdata.splice(index,1);
+      return "Successfully deleted";
+    }
+    return "404! Not Found";
+  }
+
 }

@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Delete } from '@nestjs/common';
 import {LaptopsService} from './laptops.service';
 import { CreateLaptopDto } from './dto/create-laptop.dto';
 import { updateLaptopDto } from './dto/update-laptop.dto';
@@ -27,6 +27,11 @@ export class LaptopsController {
     @Patch(':id')
     updateLaptopById(@Param('id') id:number, @Body() updatedLaptop:updateLaptopDto){
         return this.laptopsService.updateLaptopById(Number(id),updatedLaptop);
+    }
+
+    @Delete(':id')
+    deleteLaptopById(@Param('id') id:number){
+        return this.laptopsService.deleteLaptopById(Number(id));
     }
 }
 
