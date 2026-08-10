@@ -5,6 +5,7 @@ import { RegisterDto } from './dto/signup.dto';
 import { UserInterface } from './interfaces/user.interface';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
+import { User } from 'src/users/user.entity';
 
 @Injectable()
 export class AuthService {
@@ -14,7 +15,7 @@ export class AuthService {
   ) {}
 
   
-  async register(data: RegisterDto): Promise<string> {
+  async register(data: RegisterDto): Promise<User[]> {
     const saltRounds = 10;
     const hashedPassword = await bcrypt.hash(data.password, saltRounds);
 
@@ -27,7 +28,7 @@ export class AuthService {
 
 
   async login(data: LoginDto): Promise<{ access_token: string }> {
-    const user: UserInterface = await this.userservice.findByUsername(
+    const user = await this.userservice.findByUsername(
       data.username,
     );
     if (user) {
