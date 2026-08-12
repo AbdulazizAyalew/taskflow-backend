@@ -2,7 +2,7 @@
 
 Backend API for TaskFlow — a task and project management application.
 
-This repository is a small NestJS API that currently exposes one feature area: laptops.
+This repository is a NestJS API that exposes feature areas for laptops, shops, and users. The application is backed by a PostgreSQL database and utilizes TypeORM for data mapping and atomic transactions.
 
 ## What the project does
 
@@ -11,6 +11,7 @@ The app starts in [src/main.ts](src/main.ts), which creates the Nest application
 The root application wiring lives in [src/app.module.ts](src/app.module.ts). That file imports two feature modules:
 
 - `LaptopsModule`
+- `ShopsModule`
 - `UsersModule`
 
 ## How the pieces fit together
@@ -19,37 +20,27 @@ The root application wiring lives in [src/app.module.ts](src/app.module.ts). Tha
 
 File: [src/app.module.ts](src/app.module.ts)
 
-`AppModule` is the root module. It does not contain business logic itself; it simply imports `LaptopsModule` and `UsersModule`.
+`AppModule` is the root module. It establishes the PostgreSQL database connection via TypeORM and imports the feature modules.
 
 ### 2. `LaptopsModule`
 
 File: [src/laptops/laptops.module.ts](src/laptops/laptops.module.ts)
 
-This module is where the laptop feature is registered:
-
-- `controllers: [LaptopsController]`
-- `providers: [LaptopsService]`
-
-In plain terms, this module says:
-
-- the HTTP route handling for laptops lives in `LaptopsController`
-- the data-loading logic lives in `LaptopsService`
-
-### 3. `LaptopsController`
-
-File: [src/laptops/laptops.controller.ts](src/laptops/laptops.controller.ts)
-
-This controller is the HTTP entry point. Its route is `@Controller('laptops')`. It handles GET, POST, PATCH, and DELETE requests and delegates them to the service.
+This module handles the `Laptop` entity.
+- The HTTP route handling lives in `LaptopsController`.
+- The data-access layer lives in `LaptopsService`, using injected TypeORM repositories to interact with the database.
 
 
-### 4. `LaptopsService`
+### 3. `ShopsModule`
 
-File: [src/laptops/laptops.service.ts](src/laptops/laptops.service.ts)
+File: [src/shops/shops.module.ts](src/shops/shops.module.ts)
 
-This service is the data-access layer for this project. It does not use a database or ORM. Currently, it holds the laptop data as a class-level, in-memory array (seeded with existing data).
+This module manages the `Shop` entity, which shares a `@ManyToMany` database relationship with Laptops.
+- Features atomic database transactions (QueryRunner) to ensure data integrity when creating new shops alongside initial inventory.
+- Handles junction-table querying to filter shops by the laptops they carry.
 
 ### 5. `UsersModule`
-Scaffolding for the `UsersModule` (Module, Controller, Service) is in place and registered in the `AppModule`. CRUD logic will be implemented in a future milestone.
+Handles user registration, authentication, and JWT token generation.
 
 
 ## How to run the project
@@ -57,10 +48,16 @@ Scaffolding for the `UsersModule` (Module, Controller, Service) is in place and 
 From the repository root in WSL or a Node-enabled shell:
 
 **1. Set up your environment variable** : 
-Create a `.env` file in the root of the project and add a secret key for JWT signing:
+Create a `.env` file in the root of the project to define your PostgreSQL connection details and JWT secret:
 ```bash
-echo "JWT_SECRET=your_super_secret_key_here" > .env
+JWT_SECRET=your_super_secret_key_here
+DB_HOST=localhost
+DB_PORT=5432
+DB_USER=your_postgres_user
+DB_PASSWORD=your_postgres_password
+DB_NAME=taskflow_db
 ```
+
 **2. Install and run**:
 
 ```bash
@@ -154,7 +151,49 @@ curl -X DELETE http://localhost:3000/laptops/1022 \
 ```
 
 
-## Notes
+## API Call Guide: Shops & Relations
+### Create a Shop AND an initial Laptop (Atomic Transaction)
+This endpoint uses a database transaction. If either the shop or laptop data fails validation or saving, both are rolled back and neither is saved to the database.
 
-- This project currently uses an in-memory array rather than a database.
-- The codebase is intentionally small, so the controller/service/module structure is easy to follow end-to-end.
+``` bash
+curl -X POST http://localhost:3000/shops \
+-H "Content-Type: application/json" \
+-d '{
+  "shop": {
+    "name": "Addis Tech Hub",
+    "location": "Bole"
+  },
+  "laptop": {
+    "description": "A brand new Macbook",
+    "brand": "Apple",
+    "ram": 16,
+    "price": 150000
+  }
+}'
+```
+
+### Link an existing Laptop to an existing Shop
+Populates the @ManyToMany junction table to add a laptop to a shop's inventory.
+
+``` bash
+curl -X POST http://localhost:3000/shops/1/laptops/1
+```
+
+### Get all Shops (Includes nested Laptop inventory)
+``` bash
+curl -X GET http://localhost:3000/shops
+```
+Response includes the shop details and an array of linked laptops.
+
+### Find all Shops selling a specific Laptop ID
+
+``` bash
+curl -X GET http://localhost:3000/shops/laptop/1
+```
+
+## Notes
+- This project uses a PostgreSQL database mapped with TypeORM, fully replacing the previous in-memory data structure.
+
+- The data access layer demonstrates relational database concepts, including @ManyToMany relationships and atomic transactions using TypeORM's QueryRunner.
+
+- The codebase is intentionally small, so the NestJS controller/service/module structure remains easy to follow end-to-end.
