@@ -1,10 +1,6 @@
-import { IsString, IsInt, IsPositive, IsNotEmpty, MinLength, MaxLength } from "class-validator";
+import { IsString, IsInt, IsPositive, IsNotEmpty, MinLength } from "class-validator";
 
 export class CreateLaptopDto {
-  @IsInt()
-  @IsPositive()
-  id: number;
-
   @IsString()
   @IsNotEmpty()
   @MinLength(10,{

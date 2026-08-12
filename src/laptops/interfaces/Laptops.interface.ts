@@ -1,4 +1,4 @@
-export interface Laptop {
+export interface LaptopInterface {
   id: number;
   description: string;
   brand: string;
