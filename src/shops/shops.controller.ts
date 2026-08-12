@@ -1,6 +1,7 @@
 import { Body, Controller, Get, Post, Param, ParseIntPipe } from '@nestjs/common';
 import { CreateShopDto } from './dtos/create_shop_dto';
 import { ShopsService } from './shops.service';
+import { CreateLaptopDto } from 'src/laptops/dto/create-laptop.dto';
 import { Shop } from './shop.entitiy';
 
 
@@ -16,10 +17,17 @@ export class ShopsController {
         return this.shopservice.getShops();
     }
 
+
     @Post()
-    async createshop(@Body() newshop: CreateShopDto ): Promise<string>{
-        return this.shopservice.createShops(newshop);
+    async createshop(
+        @Body('shop') newshop: CreateShopDto,
+        @Body('laptop') newLaptop: CreateLaptopDto
+ ): Promise<string>{
+
+        return this.shopservice.createShop(newshop,newLaptop);
+
     }
+
 
     @Post(':shopId/laptops/:laptopId')
     async addLaptopToShop(
