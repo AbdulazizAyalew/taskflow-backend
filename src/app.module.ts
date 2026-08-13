@@ -1,10 +1,11 @@
 import { LaptopsModule } from './laptops/laptops.module';
-import { Module } from '@nestjs/common';
+import { Module, NestModule, MiddlewareConsumer } from '@nestjs/common';
 import { UsersModule } from './users/users.module';
 import { AuthModule } from './auth/auth.module';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ShopsModule } from './shops/shops.module';
+import { LoggerMiddleware } from './logger.middleware';
 
 
 @Module({
@@ -32,4 +33,10 @@ import { ShopsModule } from './shops/shops.module';
     ShopsModule,
   ],
 })
-export class AppModule {}
+export class AppModule implements NestModule{
+  configure(consumer: MiddlewareConsumer){
+    consumer
+      .apply(LoggerMiddleware)
+      .forRoutes("*")
+  }
+}
