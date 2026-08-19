@@ -53,9 +53,9 @@ Create a `.env` file in the root of the project to define your PostgreSQL connec
 JWT_SECRET=your_super_secret_key_here
 DB_HOST=localhost
 DB_PORT=5432
-DB_USER=your_postgres_user
+DB_USERNAME=your_postgres_user
 DB_PASSWORD=your_postgres_password
-DB_NAME=taskflow_db
+DB_DATABASE=taskflow_db
 ```
 
 **2. Install and run**:
