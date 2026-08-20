@@ -39,17 +39,46 @@ This module manages the `Shop` entity, which shares a `@ManyToMany` database rel
 - Features atomic database transactions (QueryRunner) to ensure data integrity when creating new shops alongside initial inventory.
 - Handles junction-table querying to filter shops by the laptops they carry.
 
-### 5. `UsersModule`
+### 4. `UsersModule`
 Handles user registration, authentication, and JWT token generation.
 
+
+## 🛡️ Security & API Hardening
+
+This API is built with production-ready security standards:
+* **Helmet:** HTTP headers are automatically secured, protecting against clickjacking, cross-site scripting (XSS), and MIME-sniffing. The `X-Powered-By` header is disabled.
+* **CORS:** Cross-Origin Resource Sharing is enabled for frontend integration.
+* **Rate Limiting:** A global limit of 10 requests per minute is enforced per IP address to prevent abuse. Critical routes, such as `/auth/login`, enforce a stricter limit of 3 requests per minute to prevent brute-force attacks.
+
+## Environment Configuration
+
+The application enforces strict environment variable validation on startup using `@nestjs/config` and `Joi`. 
+* **Fail-Fast Booting:** If any required environment variable (such as `JWT_SECRET` or database credentials) is missing or incorrectly typed in the `.env` file, the server will immediately crash with a descriptive error rather than failing silently at runtime.
+
+## Standard Response Contract
+
+All successful API responses are intercepted and formatted into a unified, predictable structure. Exceptions are caught by a global filter to ensure error shapes remain consistent and do not leak stack traces.
+
+**Error Response Example:**
+
+```json
+{
+  "statusCode": 429,
+  "message": "ThrottlerException: Too Many Requests",
+  "error": "Too Many Requests",
+  "timestamp": "2026-08-20T06:48:33.199Z",
+  "path": "/laptops"
+}
+```
 
 ## How to run the project
 
 From the repository root in WSL or a Node-enabled shell:
 
 **1. Set up your environment variable** : 
-Create a `.env` file in the root of the project to define your PostgreSQL connection details and JWT secret:
+Create a .env file in the root of the project to define your PostgreSQL connection details and JWT secret (refer to .env.example for the required schema):
 ```bash
+PORT=3000
 JWT_SECRET=your_super_secret_key_here
 DB_HOST=localhost
 DB_PORT=5432
@@ -109,15 +138,19 @@ curl -X GET http://localhost:3000/laptops
 Example response:
 
 ```json
-[
-  {
-    "id": 1022,
-    "description": "A brand new Lenovo Laptop",
-    "brand": "Lenovo Yoga",
-    "ram": 16,
-    "price": 125000
-  }
-]
+{
+  "success": true,
+  "data": [
+    {
+      "id": 1022,
+      "description": "A brand new Lenovo Laptop",
+      "brand": "Lenovo Yoga",
+      "ram": 16,
+      "price": 125000
+    }
+  ],
+  "timestamp": "2026-08-20T12:00:00.000Z"
+}
 ```
 
 ### Get laptop by ID (Public Route)
