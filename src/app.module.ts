@@ -1,16 +1,25 @@
 import { LaptopsModule } from './laptops/laptops.module';
-import { Module } from '@nestjs/common';
+import { Module, NestModule, MiddlewareConsumer } from '@nestjs/common';
 import { UsersModule } from './users/users.module';
 import { AuthModule } from './auth/auth.module';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ShopsModule } from './shops/shops.module';
+import { LoggerMiddleware } from './logger.middleware';
+import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
+import { APP_GUARD } from '@nestjs/core';
+import { envValidationSchema } from './config/env.validation';
 
 
 @Module({
   imports: [
+    ThrottlerModule.forRoot([{
+      ttl: 60000,
+      limit: 10,
+    }]),
     ConfigModule.forRoot({
       isGlobal: true,
+      validationSchema: envValidationSchema,
     }),
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
@@ -31,5 +40,17 @@ import { ShopsModule } from './shops/shops.module';
     AuthModule,
     ShopsModule,
   ],
+  providers: [
+   {
+    provide: APP_GUARD,
+    useClass: ThrottlerGuard,
+  }
+  ],
 })
-export class AppModule {}
+export class AppModule implements NestModule{
+  configure(consumer: MiddlewareConsumer){
+    consumer
+      .apply(LoggerMiddleware)
+      .forRoutes("*")
+  }
+}
