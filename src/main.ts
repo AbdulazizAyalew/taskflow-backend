@@ -4,6 +4,7 @@ import { AppModule } from './app.module';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
 import { GlobalExceptionFilter } from './common/filters/global-exception.filter';
 import helmet from 'helmet';
+import { ConfigService } from '@nestjs/config';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -26,7 +27,12 @@ async function bootstrap() {
 
   app.enableCors();
 
+  const configService = app.get(ConfigService);
 
-  await app.listen(3000);
+  const port = configService.get<number>('port')!;
+
+  await app.listen(port);
+
+  console.log(`Application is running on: http://localhost:${port}`);
 }
 bootstrap();
