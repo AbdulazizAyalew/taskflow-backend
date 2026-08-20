@@ -6,10 +6,16 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ShopsModule } from './shops/shops.module';
 import { LoggerMiddleware } from './logger.middleware';
+import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
+import { APP_GUARD } from '@nestjs/core';
 
 
 @Module({
   imports: [
+    ThrottlerModule.forRoot([{
+      ttl: 60000,
+      limit: 10,
+    }]),
     ConfigModule.forRoot({
       isGlobal: true,
     }),
@@ -31,6 +37,12 @@ import { LoggerMiddleware } from './logger.middleware';
     UsersModule,
     AuthModule,
     ShopsModule,
+  ],
+  providers: [
+   {
+    provide: APP_GUARD,
+    useClass: ThrottlerGuard,
+  }
   ],
 })
 export class AppModule implements NestModule{
