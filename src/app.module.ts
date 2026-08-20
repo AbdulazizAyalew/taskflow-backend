@@ -8,6 +8,7 @@ import { ShopsModule } from './shops/shops.module';
 import { LoggerMiddleware } from './logger.middleware';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { APP_GUARD } from '@nestjs/core';
+import { envValidationSchema } from './config/env.validation';
 
 
 @Module({
@@ -18,6 +19,7 @@ import { APP_GUARD } from '@nestjs/core';
     }]),
     ConfigModule.forRoot({
       isGlobal: true,
+      validationSchema: envValidationSchema,
     }),
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
