@@ -1,6 +1,6 @@
 # Taskflow-backend
 
-Backend API for TaskFlow — a task and project management application.
+Backend API for TaskFlow - a task and project management application.
 
 This repository is a NestJS API that exposes feature areas for laptops, shops, and users. The application is backed by a PostgreSQL database and utilizes TypeORM for data mapping and atomic transactions.
 
@@ -43,12 +43,22 @@ This module manages the `Shop` entity, which shares a `@ManyToMany` database rel
 Handles user registration, authentication, and JWT token generation.
 
 
-## 🛡️ Security & API Hardening
+##  Security & API Hardening
 
 This API is built with production-ready security standards:
 * **Helmet:** HTTP headers are automatically secured, protecting against clickjacking, cross-site scripting (XSS), and MIME-sniffing. The `X-Powered-By` header is disabled.
 * **CORS:** Cross-Origin Resource Sharing is enabled for frontend integration.
 * **Rate Limiting:** A global limit of 10 requests per minute is enforced per IP address to prevent abuse. Critical routes, such as `/auth/login`, enforce a stricter limit of 3 requests per minute to prevent brute-force attacks.
+
+
+## Access Control (RBAC & Ownership)
+
+The application enforces strict authorization rules combining Role-Based Access Control (RBAC) and Resource Ownership:
+
+* **Role-Based Access Control (RBAC):** Users are assigned a role of either `user` (default) or `admin`. Specific routes are protected by a `@Roles()` guard. For example, only Admins can view the full list of registered users.
+* **Resource Ownership:** Entities like Laptops and Shops track the user who created them via a `userId` foreign key. Regular users can **only** update or delete records they created.
+* **The Admin Bypass:** Admins act as superusers. They automatically bypass ownership checks and can update or delete any resource in the system.
+
 
 ## Environment Configuration
 
@@ -127,6 +137,30 @@ Example response:
 ```
 Copy the access_token string from the response. You will need it for the protected routes below.
 
+## API Call Guide: Users (Admin Only)
+
+### Get all users
+This route is protected by the `RolesGuard` and requires the `admin` role.
+
+**Denied (Regular User):**
+```bash
+curl -X GET http://localhost:3000/users \
+-H "Authorization: Bearer <regular_user_token>"
+
+
+
+```
+Response: 403 Forbidden ("You do not have the required permissions")
+
+**Allowed (Admin User):**
+
+```bash
+curl -X GET http://localhost:3000/users \
+-H "Authorization: Bearer <admin_token>"
+
+```
+Response: 200 OK (Array of all registered users)
+
 ## API Call Guide: Laptops
 
 ### Get all laptops (Public Route)
@@ -169,7 +203,11 @@ curl -X POST http://localhost:3000/laptops \
 -d '{"id": 1025, "brand": "Dell XPS 15", "description": "Brand new Dell", "ram": 32, "price": 180000}'
 ```
 
-### Update a laptop (Protected Route)
+### Update a laptop (Resource Ownership Check)
+
+Regular users can only update laptops they created. 
+
+**Allowed (User owns the laptop or is Admin):**
 ```bash
 curl -X PATCH http://localhost:3000/laptops/1022 \
 -H "Content-Type: application/json" \
@@ -177,12 +215,36 @@ curl -X PATCH http://localhost:3000/laptops/1022 \
 -d '{"price": 115000}'
 ```
 
-### Delete a laptop (Protected Route)
+**Denied (User tries to update another user's laptop):**
+```bash
+curl -X PATCH http://localhost:3000/laptops/1022 \
+-H "Content-Type: application/json" \
+-H "Authorization: Bearer <other_users_token>" \
+-d '{"price": 115000}'
+```
+
+**Response:**
+```bash
+{
+  "statusCode": 403,
+  "message": "You can only edit your own laptops",
+  "error": "Forbidden"
+}
+```
+
+### Delete a laptop (Resource Ownership Check)
+**Allowed (User owns the laptop):**
 ```bash
 curl -X DELETE http://localhost:3000/laptops/1022 \
 -H "Authorization: Bearer <your_token_here>"
 ```
+**Denied (User tries to delete another user's laptop):**
 
+```bash
+curl -X DELETE http://localhost:3000/laptops/1022 \
+-H "Authorization: Bearer <other_users_token>"
+```
+Response: 403 Forbidden ("You can only delete your own laptops")
 
 ## API Call Guide: Shops & Relations
 ### Create a Shop AND an initial Laptop (Atomic Transaction)
