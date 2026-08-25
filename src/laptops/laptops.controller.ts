@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, Delete, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Delete, UseGuards, Req } from '@nestjs/common';
 import {LaptopsService} from './laptops.service';
 import { CreateLaptopDto } from './dto/create-laptop.dto';
 import { updateLaptopDto } from './dto/update-laptop.dto';
@@ -30,8 +30,8 @@ export class LaptopsController {
 
 
   @Post()
-  createLaptop(@Body() newLaptop: CreateLaptopDto) {
-    return this.laptopsService.createLaptop(newLaptop);
+  createLaptop(@Body() newLaptop: CreateLaptopDto,@Req() req:any) {
+    return this.laptopsService.createLaptop(newLaptop,req.user);
   }
 
 
@@ -39,15 +39,16 @@ export class LaptopsController {
   updateLaptopById(
     @Param('id') id: number,
     @Body() updatedLaptop: updateLaptopDto,
+    @Req() req:any,
   ) {
-    return this.laptopsService.updateLaptopById(Number(id), updatedLaptop);
+    return this.laptopsService.updateLaptopById(Number(id), updatedLaptop,req.user);
   }
 
 
   @Roles(UserRole.USER)
   @Delete(':id')
-  deleteLaptopById(@Param('id') id: number) {
-    return this.laptopsService.deleteLaptopById(Number(id));
+  deleteLaptopById(@Param('id') id: number, @Req() req:any) {
+    return this.laptopsService.deleteLaptopById(Number(id),req.user);
   }
 
 }
