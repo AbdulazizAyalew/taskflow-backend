@@ -1,52 +1,175 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { LaptopsController } from './laptops.controller';
 import { LaptopsService } from './laptops.service';
+import { JwtAuthGuard } from 'src/auth/jwt-auth.guard';
+import { RolesGuard } from 'src/common/guards/roles.guard';
+
+
+const mockLaptopsService = {
+  loadLaptops: jest.fn(),
+  loadlaptopById: jest.fn(),
+  createLaptop: jest.fn(),
+  updateLaptopById: jest.fn(),
+  deleteLaptopById: jest.fn(),
+};
 
 describe('LaptopsController', () => {
   let controller: LaptopsController;
-  let service: LaptopsService;
 
   beforeEach(async () => {
+    jest.clearAllMocks(); 
+
     const module: TestingModule = await Test.createTestingModule({
       controllers: [LaptopsController],
-      providers: [LaptopsService],
-    }).compile();
+      providers: [
+        {
+          provide: LaptopsService,
+          useValue: mockLaptopsService,
+        },
+      ],
+    })
+
+      .overrideGuard(JwtAuthGuard)
+      .useValue({ canActivate: jest.fn(() => true) })
+      .overrideGuard(RolesGuard)
+      .useValue({ canActivate: jest.fn(() => true) })
+      .compile();
 
     controller = module.get<LaptopsController>(LaptopsController);
-    service = module.get<LaptopsService>(LaptopsService);
   });
 
-  it('should return mock Laptop data', async () => {
+  it('should be defined', () => {
+    expect(controller).toBeDefined();
+  });
 
-    const fakeFiledata = [
-      {
+  describe('getLaptops', () => {
+    it('should return an array of laptops', async () => {
+      const expectedLaptops = [
+        { id: 1022, description: 'Lenovo Legion', model: "Lenovo",ram: 32, price: 150000 },
+      ];
+      mockLaptopsService.loadLaptops.mockResolvedValue(expectedLaptops);
+
+      const result = await controller.getLaptops();
+
+      expect(result).toEqual(expectedLaptops);
+      expect(mockLaptopsService.loadLaptops).toHaveBeenCalledTimes(1);
+    });
+  });
+
+
+
+  describe('getLaptopsById', () => {
+    it('should return a laptop on success', async () => {
+      const expectedLaptop = {
         id: 1022,
-        description: 'A brand new Lenovo Laptop',
-        brand: 'Lenovo Yoga',
-        ram: 16,
-        price: 125000,
-      },
-      {
-        id: 1023,
-        description: 'A brand new HP Laptop',
-        brand: 'HP Elitebook',
-        ram: 16,
-        price: 52000,
-      },
-      {
-        id: 1024,
-        description: 'A brand new Macbook M5 PRO Laptop',
-        brand: 'Macbook M5 Pro 24GB Unified Memory',
-        ram: 16,
-        price: 550000,
-      },
-    ];
-    jest.spyOn(service, 'loadLaptops').mockResolvedValue(fakeFiledata);
-    
-    const result = await controller.getLaptops();
+        description: "LENOVO",
+        model: "Lenovo",
+        ram: 32,
+        price: 10000,
+      };
 
-    expect(result).toEqual(fakeFiledata);
+      mockLaptopsService.loadlaptopById.mockResolvedValue(expectedLaptop);
+
+
+      const result = await controller.getLaptopById(1022);
+
+      expect(result).toEqual(expectedLaptop);
+      expect(mockLaptopsService.loadlaptopById).toHaveBeenCalledWith(1022);
+      expect(mockLaptopsService.loadlaptopById).toHaveBeenCalledTimes(1);
+    });
   });
+  
+
+  describe('createLaptop', () => {
+    it('should return the created laptop object on success', async () => {
+
+      const newLaptop = {
+        description: "Pavilion",
+        brand: "HP",
+        ram: 16,
+        price: 102000
+      };
+
+      const expectedresult = {
+        id: 1,
+        description: "Pavilion",
+        brand: "HP",
+        ram: 16,
+        price: 102000,
+        userId: 1
+      };
+
+
+      const mockReq = { 
+  user: { userId: 1, username: "tester1" } 
+};
+
+      mockLaptopsService.createLaptop.mockResolvedValue(expectedresult);
+
+      const result = await controller.createLaptop(newLaptop,mockReq);
+
+      expect(result).toEqual(expectedresult);
+      expect(mockLaptopsService.createLaptop).toHaveBeenCalledWith(newLaptop,mockReq.user);
+      expect(mockLaptopsService.createLaptop).toHaveBeenCalledTimes(1); 
+
+    });
+  });
+
+
+  describe('updateLaptopById', () => {
+    it('should return the updated data on success', async () => {
+      const updateData = {
+      brand: "HP",
+    };
+
+    const expectedresult = {
+      id: 1,
+      description: "HP",
+      brand: "HP",
+      ram: 16,
+      price: 20000,
+      userId: 1,
+    };
+
+
+    const mockReq = { 
+  user: { userId: 1, username: "tester1" } 
+};
+
+    mockLaptopsService.updateLaptopById.mockResolvedValue(expectedresult)
+
+    const result = await controller.updateLaptopById(1,updateData, mockReq);
+
+    expect(result).toEqual(expectedresult);
+    expect(mockLaptopsService.updateLaptopById).toHaveBeenCalledWith(1,updateData,mockReq.user);
+    expect(mockLaptopsService.updateLaptopById).toHaveBeenCalledTimes(1);
+
+    });
+  });
+
+
+
+  describe('deleteLaptopsById', () => {
+    it('should return the deleted laptop object on success', async () => {
+      const mockReq = { 
+      user: { userId: 1, username: "tester1" } 
+    };
+
+    const expectedresult = {
+      id: 1,
+      description: "HP",
+      brand: "HP",
+      ram: 32,
+      price: 20000,
+    };
+
+    mockLaptopsService.deleteLaptopById.mockResolvedValue(expectedresult);
+
+    const result = await controller.deleteLaptopById(1, mockReq);
+
+    expect(result).toEqual(expectedresult);
+    expect(mockLaptopsService.deleteLaptopById).toHaveBeenCalledWith(1,mockReq.user);
+    expect(mockLaptopsService.deleteLaptopById).toHaveBeenCalledTimes(1);
+    })
+  })
 });
-
-
