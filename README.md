@@ -110,6 +110,27 @@ The app starts on:
 http://localhost:3000
 ```
 
+
+## How to run the tests
+
+This project includes a comprehensive unit testing suite using Jest, heavily utilizing mocking to isolate controllers, services, guards, and strategies without relying on a live database.
+
+**Run standard unit tests:**
+```bash
+npm run test
+```
+
+### Run tests with a coverage report:
+
+```bash
+npm run test:cov
+```
+
+### Coverage Target:
+The project enforces an automated quality gate for test coverage via package.json. The current global threshold is set to 30% (for statements, branches, functions, and lines), specifically excluding NestJS boilerplate files (like modules and DTOs). If coverage drops below this baseline, the test script will fail.
+
+
+
 ## API Call Guide: Authentication Flow
 
 To modify laptops, you must first register and log in to receive an access token. Note: All endpoints validate incoming data; passing invalid data will result in a 400 Bad Request.
