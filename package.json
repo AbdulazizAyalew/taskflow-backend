@@ -74,9 +74,24 @@
     "transform": {
       "^.+\\.(t|j)s$": "ts-jest"
     },
-    "collectCoverageFrom": ["**/*.(t|j)s"],
+    "collectCoverageFrom": [
+    "**/*.(t|j)s",
+    "!**/*.module.(t|j)s",
+    "!**/main.(t|j)s",
+    "!**/*.dto.(t|j)s",
+    "!**/*.entity.(t|j)s"
+   ],
     "coverageDirectory": "../coverage",
     "testEnvironment": "node",
+
+    "coverageThreshold": {
+    "global": {
+      "branches": 30,
+      "functions": 30,
+      "lines": 30,
+      "statements": 30
+    }
+  },
     
     "moduleNameMapper": {
       "^src/(.*)$": "<rootDir>/$1"
