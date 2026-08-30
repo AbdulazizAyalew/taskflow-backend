@@ -1,0 +1,13 @@
+version: '3.8'
+
+services:
+  postgres-test:
+    image: postgres:15-alpine
+    container_name: taskflow_test_db
+    environment:
+      POSTGRES_USER: test_user
+      POSTGRES_PASSWORD: test_password
+      POSTGRES_DB: taskflow_test
+    ports:
+      - "5433:5432" 
+    restart: unless-stopped

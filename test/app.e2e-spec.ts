@@ -17,10 +17,10 @@ describe('My Custome route (e2e)', () => {
   });
 
   it('/ (GET /Laptops)', () => {
-    return request(app.getHttpServer())
-      .get('/Laptops')
-      .expect(200)
-      .expect('Working');
+  return request(app.getHttpServer())
+    .get('/Laptops')
+    .expect(200)
+    .expect([]); // Change 'Working' to an empty array
   });
 
   afterEach(async () => {
