@@ -5,6 +5,7 @@ import { updateLaptopDto } from './dto/update-laptop.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Laptop } from './Laptop.entity';
+import { UserRole } from 'src/common/enums/user-role.enum';
 
 @Injectable()
 export class LaptopsService {
@@ -77,8 +78,11 @@ export class LaptopsService {
       throw new NotFoundException(`Laptop with ${id} not found`);
     }
 
-    if (laptop.userId != user.userId){
-      throw new ForbiddenException('You can only delete you own Laptops');
+    if (laptop.userId != user.userId) {
+      if (user.role !== UserRole.ADMIN){
+        throw new ForbiddenException('You can only delete you own Laptops');
+      }
+      
     }
     return await this.laptopRepository.remove(laptop);
     
