@@ -20,6 +20,7 @@
     "test:e2e": "NODE_ENV=test jest --config ./test/jest-e2e.json"
   },
   "dependencies": {
+    "@nestjs/cache-manager": "^12.0.0",
     "@nestjs/common": "^11.0.1",
     "@nestjs/config": "^4.0.4",
     "@nestjs/core": "^11.0.1",
@@ -29,6 +30,8 @@
     "@nestjs/throttler": "^6.5.0",
     "@nestjs/typeorm": "^11.0.3",
     "bcrypt": "^6.0.0",
+    "cache-manager": "^7.2.9",
+    "cache-manager-redis-store": "^3.0.1",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.15.1",
     "helmet": "^8.3.0",
@@ -47,6 +50,7 @@
     "@nestjs/schematics": "^11.0.0",
     "@nestjs/testing": "^11.2.3",
     "@types/bcrypt": "^6.0.0",
+    "@types/cache-manager-redis-store": "^2.0.4",
     "@types/express": "^5.0.0",
     "@types/jest": "^30.0.0",
     "@types/node": "^24.0.0",
@@ -68,31 +72,36 @@
     "typescript-eslint": "^8.20.0"
   },
   "jest": {
-    "moduleFileExtensions": ["js", "json", "ts"],
+    "moduleFileExtensions": [
+      "js",
+      "json",
+      "ts"
+    ],
     "rootDir": "src",
     "testRegex": ".*\\.spec\\.ts$",
     "transform": {
       "^.+\\.(t|j)s$": "ts-jest"
     },
     "collectCoverageFrom": [
-    "**/*.(t|j)s",
-    "!**/*.module.(t|j)s",
-    "!**/main.(t|j)s",
-    "!**/*.dto.(t|j)s",
-    "!**/*.entity.(t|j)s"
-   ],
+      "**/*.(t|j)s",
+      "!**/*.module.(t|j)s",
+      "!**/main.(t|j)s",
+      "!**/*.dto.(t|j)s",
+      "!**/*.entity.(t|j)s"
+    ],
+    "transformIgnorePatterns": [
+    "node_modules/(?!@nestjs/cache-manager|cache-manager|cache-manager-redis-store)"
+  ],
     "coverageDirectory": "../coverage",
     "testEnvironment": "node",
-
     "coverageThreshold": {
-    "global": {
-      "branches": 30,
-      "functions": 30,
-      "lines": 30,
-      "statements": 30
-    }
-  },
-    
+      "global": {
+        "branches": 30,
+        "functions": 30,
+        "lines": 30,
+        "statements": 30
+      }
+    },
     "moduleNameMapper": {
       "^src/(.*)$": "<rootDir>/$1"
     }
