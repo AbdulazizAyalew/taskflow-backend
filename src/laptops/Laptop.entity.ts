@@ -1,8 +1,9 @@
-import { Entity, Column, PrimaryGeneratedColumn, ManyToOne, JoinColumn } from "typeorm";
+import { Entity, Column, PrimaryGeneratedColumn, ManyToOne, JoinColumn, Index } from "typeorm";
 import { User} from "src/users/user.entity";
 
 @Entity('laptops')
 export class Laptop{
+
     @PrimaryGeneratedColumn()
     id: number;
 
@@ -13,12 +14,14 @@ export class Laptop{
     @JoinColumn({name:'userId'})
     user: User;
 
+    @Index()
     @Column({ nullable: true })
     userId: string;
 
     @Column()
     description: string;
 
+    @Index()
     @Column()
     brand: string;
 

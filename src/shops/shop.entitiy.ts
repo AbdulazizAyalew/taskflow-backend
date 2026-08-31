@@ -1,4 +1,4 @@
-import { Entity, Column, PrimaryGeneratedColumn, ManyToMany, JoinTable, OneToOne, JoinColumn } from "typeorm";
+import { Entity, Column, PrimaryGeneratedColumn, ManyToMany, JoinTable, OneToOne, JoinColumn, Index } from "typeorm";
 import { Laptop } from "src/laptops/Laptop.entity";
 import { User } from "src/users/user.entity";
 
@@ -14,6 +14,7 @@ export class Shop{
     @JoinColumn({name:'userId'})
     user:User;
 
+    @Index()
     @Column({ nullable: true })
     userId: string;
     
