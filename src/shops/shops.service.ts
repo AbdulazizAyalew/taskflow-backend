@@ -30,11 +30,6 @@ export class ShopsService {
     return shops;
   }
 
-  // async createShops(newshop: CreateShopDto): Promise<string>{
-  //     const new_shop = await this.shoprepository.create(newshop);
-  //     await this.shoprepository.save(new_shop);
-  //     return `New Shop has been Created Successfully!`;
-  // }
   // I added newLaptop to the parameters so you can pass in the initial laptop data!
   async createShop(
     newShop: CreateShopDto,
@@ -100,6 +95,7 @@ export class ShopsService {
       where: {
         laptops: { id: laptopId },
       },
+      relations: {laptops:true},
     });
 
     if (shops.length === 0) {
