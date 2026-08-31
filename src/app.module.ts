@@ -18,6 +18,7 @@ import { envValidationSchema } from './config/env.validation';
       limit: 10,
     }]),
     ConfigModule.forRoot({
+      envFilePath: process.env.NODE_ENV === 'test' ? '.env.test': '.env',
       isGlobal: true,
       validationSchema: envValidationSchema,
     }),
