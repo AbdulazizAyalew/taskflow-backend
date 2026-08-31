@@ -130,6 +130,49 @@ npm run test:cov
 The project enforces an automated quality gate for test coverage via package.json. The current global threshold is set to 30% (for statements, branches, functions, and lines), specifically excluding NestJS boilerplate files (like modules and DTOs). If coverage drops below this baseline, the test script will fail.
 
 
+### End-to-End (E2E) Testing
+
+The E2E test suite evaluates the entire application lifecycle by running against an isolated PostgreSQL database hosted inside a Docker container. This architecture guarantees your local development database is never wiped, altered, or polluted during test execution.
+
+**Prerequisite:** You must have Docker and Docker Compose installed and running on your system.
+
+**1. Start the isolated test database:**
+Boot the temporary database in the background before running any tests.
+```bash
+docker compose -f docker-compose.test.yml up -d
+```
+(Wait approximately 3-5 seconds for the PostgreSQL container to initialize and accept connections on port 5433).
+
+**2. Run the E2E suite:**
+```bash
+npm run test:e2e
+```
+The test script automatically applies NODE_ENV=test, commanding NestJS to bypass the standard .env file, read from .env.test, and route all TypeORM traffic securely into the Docker container.
+
+**3. Stop the test database:**
+
+Once testing is complete, cleanly shut down the container and remove its temporary network:
+
+```bash
+docker compose -f docker-compose.test.yml down
+```
+
+**How Authentication is Handled in the E2E Suite:**
+
+To test protected endpoints without manual token generation, the E2E suite utilizes an automated authentication helper within Jest's beforeAll setup phase. Before the primary tests execute, the framework automatically:
+
+1. Wipes the test database completely clean using TypeORM's synchronize(true).
+2. Registers three distinct test actors via the API: a standard Owner, a secondary Bystander, and an Admin (promoted via a raw SQL query).
+3. Executes login requests for all three actors to extract cryptographically signed JWTs.
+4. Programmatically injects these tokens into the Supertest Authorization headers to systematically verify Role-Based Access Control (RBAC) and strict Resource Ownership rules across the application.
+
+
+
+
+
+
+
+
 
 ## API Call Guide: Authentication Flow
 
