@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, Delete, UseGuards, Req } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Delete, UseGuards, Req, UseInterceptors, Query } from '@nestjs/common';
 import {LaptopsService} from './laptops.service';
 import { CreateLaptopDto } from './dto/create-laptop.dto';
 import { updateLaptopDto } from './dto/update-laptop.dto';
@@ -7,6 +7,7 @@ import { Public } from 'src/common/decorators/public.decorator';
 import { RolesGuard } from 'src/common/guards/roles.guard';
 import { Roles } from 'src/common/decorators/roles.decorator';
 import { UserRole } from 'src/common/enums/user-role.enum';
+import { CacheInterceptor } from '@nestjs/cache-manager';
 
 @Controller('laptops')
 @UseGuards(JwtAuthGuard,RolesGuard)
@@ -14,11 +15,11 @@ export class LaptopsController {
 
   constructor(private readonly laptopsService: LaptopsService) {}
 
-
+  @UseInterceptors(CacheInterceptor)
   @Public()
   @Get()
-  getLaptops() {
-    return this.laptopsService.loadLaptops();
+  getLaptops(@Query() query:any) {
+    return this.laptopsService.loadLaptops(query);
   }
 
 

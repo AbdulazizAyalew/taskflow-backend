@@ -42,6 +42,11 @@ This module manages the `Shop` entity, which shares a `@ManyToMany` database rel
 ### 4. `UsersModule`
 Handles user registration, authentication, and JWT token generation.
 
+## Performance & Database Optimization
+* **Redis Caching:** The `GET /laptops` endpoint is heavily optimized using an in-memory Redis store (running via Docker). Responses are cached with a **60-second TTL**, completely bypassing the PostgreSQL database for identical subsequent requests to handle high read traffic.
+* **Query Optimization:** Relational endpoints utilize TypeORM `LEFT JOIN`s to eliminate N+1 query bottlenecks.
+* **Database Indexes:** High-traffic foreign keys (`userId`) and filtering targets (`brand`) are indexed in PostgreSQL to prevent full-table scans.
+
 
 ##  Security & API Hardening
 
@@ -97,7 +102,11 @@ DB_PASSWORD=your_postgres_password
 DB_DATABASE=taskflow_db
 ```
 
-**2. Install and run**:
+**2. Start infrastructure (PostgreSQL & Redis):**
+```bash
+docker compose up -d
+```
+**3. Install and run:**
 
 ```bash
 npm install
@@ -227,27 +236,47 @@ Response: 200 OK (Array of all registered users)
 
 ## API Call Guide: Laptops
 
-### Get all laptops (Public Route)
+#### Get all laptops (Public Route - Cached & Paginated)
+This endpoint supports pagination, sorting, and filtering via URL query parameters. Responses are cached for 60 seconds.
 
+**Supported Query Parameters:**
+* `page`: Page number (default: 1)
+* `limit`: Items per page (default: 10)
+* `sort`: Column to sort by (default: 'id')
+* `order`: 'ASC' or 'DESC' (default: 'ASC')
+* `brand`: Filter by exact laptop brand
+* `minPrice` / `maxPrice`: Filter by price range
+
+**Basic Request (Defaults):**
 ```bash
 curl -X GET http://localhost:3000/laptops
 ```
-
-Example response:
-
-```json
+**Advanced Request (Filtering, Sorting & Pagination):**
+```bash
+curl -X GET "http://localhost:3000/laptops?brand=Apple&minPrice=50000&maxPrice=200000&sort=price&order=DESC&page=1&limit=5"
+```
+**Example response:**
+```bash
 {
   "success": true,
-  "data": [
-    {
-      "id": 1022,
-      "description": "A brand new Lenovo Laptop",
-      "brand": "Lenovo Yoga",
-      "ram": 16,
-      "price": 125000
+  "data": {
+    "items": [
+      {
+        "id": 1022,
+        "description": "A brand new Lenovo Laptop",
+        "brand": "Lenovo Yoga",
+        "ram": 16,
+        "price": 125000
+      }
+    ],
+    "meta": {
+      "total": 1,
+      "page": 1,
+      "limit": 5,
+      "lastPage": 1
     }
-  ],
-  "timestamp": "2026-08-20T12:00:00.000Z"
+  },
+  "timestamp": "2026-09-01T12:00:00.000Z"
 }
 ```
 

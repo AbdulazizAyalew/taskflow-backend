@@ -3,7 +3,7 @@ import { LaptopInterface } from './interfaces/Laptops.interface';
 import { CreateLaptopDto } from './dto/create-laptop.dto';
 import { updateLaptopDto } from './dto/update-laptop.dto';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, Between, MoreThanOrEqual, LessThanOrEqual, FindOptionsWhere  } from 'typeorm';
 import { Laptop } from './Laptop.entity';
 import { UserRole } from 'src/common/enums/user-role.enum';
 
@@ -16,13 +16,48 @@ export class LaptopsService {
   ) {}
 
   
-  // Returns all the available Laptops
-  async loadLaptops(): Promise<LaptopInterface[]> {
-    return this.laptopRepository.find();
+  async loadLaptops(query: any = {}): Promise<any> {
+    const page = query.page ? parseInt(query.page, 10) : 1;
+    const limit = query.limit ? parseInt(query.limit, 10) : 10;
+    const skip = (page - 1) * limit;
+
+    const sort = query.sort || 'id';
+    const order = query.order && query.order.toUpperCase() === 'DESC' ? 'DESC' : 'ASC';
+
+    const where: FindOptionsWhere<Laptop> = {};
+
+    if (query.brand) {
+      where.brand = query.brand;
+    }
+
+    if (query.minPrice && query.maxPrice) {
+      where.price = Between(parseInt(query.minPrice, 10), parseInt(query.maxPrice, 10));
+    } else if (query.minPrice) {
+      where.price = MoreThanOrEqual(parseInt(query.minPrice, 10));
+    } else if (query.maxPrice) {
+      where.price = LessThanOrEqual(parseInt(query.maxPrice, 10));
+    }
+
+
+    const [data, total] = await this.laptopRepository.findAndCount({
+      where,
+      order: { [sort]: order },
+      skip,
+      take: limit,
+    });
+
+    return {
+      items: data,
+      meta: {
+        total,
+        page,
+        limit,
+        lastPage: Math.ceil(total / limit),
+      }
+    };
   }
 
 
-  // Finds a Laptop by ID
   async loadlaptopById(id): Promise<LaptopInterface> {
     const laptop = await this.laptopRepository.findOne({
       where: { id },
@@ -34,7 +69,6 @@ export class LaptopsService {
   }
 
 
-  // Adds the new Laptop into the Laptops data
   async createLaptop(newLaptop: CreateLaptopDto, user:any): Promise<Laptop> {
     const newlapt = await this.laptopRepository.create({
       ...newLaptop,
