@@ -172,10 +172,16 @@ describe('TaskFlow E2E Suite & Auth Helper', () => {
         .send()
         .expect(200)
 
-      const laptops = response.body.data ? response.body.data : response.body;
+      const responseData = response.body.data ? response.body.data : response.body;
+
+      const laptops = responseData.items;
+
       expect(Array.isArray(laptops)).toBeTruthy();
       expect(laptops.length).toBeGreaterThan(0);
       expect(laptops[0].brand).toBe('Lenovo');
+
+      expect(responseData.meta).toBeDefined();
+      expect(responseData.meta.page).toBe(1);
     });
 
 

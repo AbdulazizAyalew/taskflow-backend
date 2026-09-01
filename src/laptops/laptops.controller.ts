@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, Delete, UseGuards, Req, UseInterceptors } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Delete, UseGuards, Req, UseInterceptors, Query } from '@nestjs/common';
 import {LaptopsService} from './laptops.service';
 import { CreateLaptopDto } from './dto/create-laptop.dto';
 import { updateLaptopDto } from './dto/update-laptop.dto';
@@ -18,8 +18,8 @@ export class LaptopsController {
   @UseInterceptors(CacheInterceptor)
   @Public()
   @Get()
-  getLaptops() {
-    return this.laptopsService.loadLaptops();
+  getLaptops(@Query() query:any) {
+    return this.laptopsService.loadLaptops(query);
   }
 
 

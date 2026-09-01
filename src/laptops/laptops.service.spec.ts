@@ -9,6 +9,7 @@ const mockLaptopRepository = {
   findOne: jest.fn(),
   create: jest.fn(),
   save: jest.fn(),
+  findAndCount: jest.fn(),
   remove: jest.fn(),
 };
 
@@ -37,32 +38,39 @@ describe('LaptopsService' ,()=> {
 
 
 
-  describe('loadlaptops', () => {
-    it('Should return an array of Laptops', async () => {
+  describe('loadLaptops', () => {
+    it('Should return a paginated object of Laptops', async () => {
       const expectedLaptops = [
         {
-            "id":1022,
-            "description":"A brand new Lenovo Laptop",
+            "id": 1022,
+            "description": "A brand new Lenovo Laptop",
             "brand": "Lenovo Legion",
             "ram": 32,
-            "price":150000
+            "price": 150000
         },
         {
-            "id":1023,
-            "description":"A brand new HP Laptop",
+            "id": 1023,
+            "description": "A brand new HP Laptop",
             "brand": "HP PAVILION",
             "ram": 16,
-            "price":110000
+            "price": 110000
         },
       ];
 
-
-      mockLaptopRepository.find.mockResolvedValue(expectedLaptops);
+      mockLaptopRepository.findAndCount.mockResolvedValue([expectedLaptops, 2]);
 
       const result = await service.loadLaptops();
 
-      expect(result).toEqual(expectedLaptops);
-      expect(mockLaptopRepository.find).toHaveBeenCalledTimes(1);
+      expect(result).toEqual({
+        items: expectedLaptops,
+        meta: {
+          total: 2,
+          page: 1,
+          limit: 10,
+          lastPage: 1
+        }
+      });
+      expect(mockLaptopRepository.findAndCount).toHaveBeenCalledTimes(1);
     });
   });
 
