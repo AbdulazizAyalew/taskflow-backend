@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { BullModule } from '@nestjs/bull';
+import { NotificationsProcessor } from './notifications.processor';
 
 @Module({
   imports: [
@@ -8,5 +9,6 @@ import { BullModule } from '@nestjs/bull';
     }),
   ],
   exports: [BullModule],
+  providers:[NotificationsProcessor],
 })
 export class NotificationsModule {}
