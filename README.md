@@ -47,6 +47,19 @@ Handles user registration, authentication, and JWT token generation.
 * **Query Optimization:** Relational endpoints utilize TypeORM `LEFT JOIN`s to eliminate N+1 query bottlenecks.
 * **Database Indexes:** High-traffic foreign keys (`userId`) and filtering targets (`brand`) are indexed in PostgreSQL to prevent full-table scans.
 
+## Background Jobs & Message Queues (Bull + Redis)
+
+To ensure fast HTTP response times and prevent the main thread from blocking during heavy I/O tasks (like sending emails or push notifications), this API utilizes an asynchronous background queue powered by **Bull** and **Redis**.
+
+**The Async Flow:**
+1. **The Trigger (Producer):** When a user successfully links a laptop to a shop (`POST /shops/:shopId/laptops/:laptopId`), the `ShopsService` instantly drops a `laptop-linked` job payload into the Redis `notifications` queue and immediately returns a `200 OK` response to the client.
+2. **The Processor (Consumer):** A completely decoupled worker (`NotificationsProcessor`) constantly listens to Redis. It picks up the `laptop-linked` job in the background and processes it (currently simulating a 2-second delay to represent a third-party notification API).
+3. **Fault Tolerance:** If the notification process fails, Bull is configured to automatically retry the job up to 3 times with a 5-second exponential backoff.
+
+**How to observe the queue:**
+When you trigger the link endpoint, watch your NestJS terminal. You will see the asynchronous lifecycle hooks fire in the background:
+* **Success:** You will see debug logs followed by `✅ Job <id> completed.`
+* **Failure:** If the processor throws an error, Bull's failure listener catches it and outputs `❌ Job <id> failed: <error message>` before scheduling a retry.
 
 ##  Security & API Hardening
 
