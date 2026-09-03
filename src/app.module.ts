@@ -11,7 +11,8 @@ import { APP_GUARD } from '@nestjs/core';
 import { envValidationSchema } from './config/env.validation';
 import { CacheModule } from '@nestjs/cache-manager';
 import * as redisStore from 'cache-manager-redis-store';
-
+import { BullModule } from '@nestjs/bull';
+import { NotificationsModule } from './notifications/notifications.module';
 
 @Module({
   imports: [
@@ -23,6 +24,16 @@ import * as redisStore from 'cache-manager-redis-store';
       envFilePath: process.env.NODE_ENV === 'test' ? '.env.test': '.env',
       isGlobal: true,
       validationSchema: envValidationSchema,
+    }),
+    BullModule.forRootAsync({
+      imports: [ConfigModule],
+      useFactory: async (configService: ConfigService) => ({
+        redis: {
+          host: configService.get<string>('REDIS_HOST'),
+          port: configService.get<number>('REDIS_PORT'),
+        },
+      }),
+      inject: [ConfigService],
     }),
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
@@ -50,6 +61,7 @@ import * as redisStore from 'cache-manager-redis-store';
     UsersModule,
     AuthModule,
     ShopsModule,
+    NotificationsModule,
   ],
   providers: [
    {

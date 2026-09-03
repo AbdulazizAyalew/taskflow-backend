@@ -5,6 +5,8 @@ import { Shop } from './shop.entitiy';
 import { CreateShopDto } from './dtos/create_shop_dto';
 import { CreateLaptopDto } from 'src/laptops/dto/create-laptop.dto';
 import { Laptop } from 'src/laptops/Laptop.entity';
+import { InjectQueue } from '@nestjs/bull';
+import type { Queue } from 'bull';
 
 
 @Injectable()
@@ -17,6 +19,9 @@ export class ShopsService {
     private laptoprepository: Repository<Laptop>,
 
     private dataSource: DataSource,
+
+    @InjectQueue('notifications')
+    private notificationsQueue: Queue,
   ) {}
 
   async getShops(): Promise<Shop[]> {
@@ -87,7 +92,15 @@ export class ShopsService {
       throw new NotFoundException(`Laptop with ID: ${laptopId} not Found!`);
     }
     shop.laptops.push(laptop);
-    return await this.shoprepository.save(shop);
+    const savedShop = await this.shoprepository.save(shop);
+
+    await this.notificationsQueue.add('laptop-linked', {
+      shopId: savedShop.id,
+      laptopId: laptop.id,
+      timestamp: new Date().toISOString(),
+    });
+
+    return savedShop;
   }
 
   async getShopsByLaptopId(laptopId: number): Promise<Shop[]> {
