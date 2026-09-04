@@ -7,7 +7,7 @@
     "^.+\\.(t|j)s$": "ts-jest"
   },
   "transformIgnorePatterns": [
-    "node_modules/(?!@nestjs/cache-manager|cache-manager|cache-manager-redis-store)"
+      "node_modules/(?!@nestjs/cache-manager|cache-manager|cache-manager-redis-store|@nestjs/bull|@nestjs/bull-shared)"
   ],
   "moduleNameMapper": {
     "^src/(.*)$": "<rootDir>/../src/$1"
