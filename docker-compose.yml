@@ -1,12 +1,3 @@
-# services:
-#   redis:
-#     image: redis: 7-alpine
-#     container_name: taskflow-redis
-#     ports:
-#       - "6379:6379"
-#     restart: unless-stopped
-
-
 services:
 
   redis:
@@ -15,3 +6,19 @@ services:
     ports:
       - "6379:6379"
     restart: unless-stopped
+  
+  rabbitmq:
+    image: rabbitmq:4-management
+    hostname: taskflow-rabbitmq
+    ports:
+      - "127.0.0.1:5672:5672"
+      - "127.0.0.1:15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: taskflow
+      RABBITMQ_DEFAULT_PASS: taskflow_local
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    restart: unless-stopped
+  
+volumes:
+  rabbitmq_data:
