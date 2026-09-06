@@ -17,7 +17,9 @@
     "test:watch": "jest --watch",
     "test:cov": "jest --coverage",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
-    "test:e2e": "NODE_ENV=apps/taskflow-backend/test jest --config ./test/jest-e2e.json"
+    "test:e2e": "NODE_ENV=apps/taskflow-backend/test jest --config ./test/jest-e2e.json",
+    "start:user-service": "nest start user-service",
+    "test:user-service:e2e": "nest build user-service && node --test apps/user-service/test/rabbitmq.e2e.cjs"
   },
   "dependencies": {
     "@nestjs/bull": "^12.0.0",
@@ -26,10 +28,13 @@
     "@nestjs/config": "^4.0.4",
     "@nestjs/core": "^11.0.1",
     "@nestjs/jwt": "^11.0.2",
+    "@nestjs/microservices": "11.1.28",
     "@nestjs/passport": "^11.0.5",
     "@nestjs/platform-express": "^11.0.1",
     "@nestjs/throttler": "^6.5.0",
     "@nestjs/typeorm": "^11.0.3",
+    "amqp-connection-manager": "^5.0.0",
+    "amqplib": "^2.0.1",
     "bcrypt": "^6.0.0",
     "bull": "^4.16.5",
     "cache-manager": "^7.2.9",
