@@ -1,8 +1,50 @@
 {
   "$schema": "https://json.schemastore.org/nest-cli",
   "collection": "@nestjs/schematics",
-  "sourceRoot": "src",
+  "sourceRoot": "apps/taskflow-backend/src",
   "compilerOptions": {
-    "deleteOutDir": true
+    "deleteOutDir": true,
+    "webpack": true,
+    "tsConfigPath": "apps/taskflow-backend/tsconfig.app.json"
+  },
+  "monorepo": true,
+  "root": "apps/taskflow-backend",
+  "projects": {
+    "catalog-service": {
+      "type": "application",
+      "root": "apps/catalog-service",
+      "entryFile": "main",
+      "sourceRoot": "apps/catalog-service/src",
+      "compilerOptions": {
+        "tsConfigPath": "apps/catalog-service/tsconfig.app.json"
+      }
+    },
+    "gateway": {
+      "type": "application",
+      "root": "apps/gateway",
+      "entryFile": "main",
+      "sourceRoot": "apps/gateway/src",
+      "compilerOptions": {
+        "tsConfigPath": "apps/gateway/tsconfig.app.json"
+      }
+    },
+    "taskflow-backend": {
+      "type": "application",
+      "root": "apps/taskflow-backend",
+      "entryFile": "main",
+      "sourceRoot": "apps/taskflow-backend/src",
+      "compilerOptions": {
+        "tsConfigPath": "apps/taskflow-backend/tsconfig.app.json"
+      }
+    },
+    "user-service": {
+      "type": "application",
+      "root": "apps/user-service",
+      "entryFile": "main",
+      "sourceRoot": "apps/user-service/src",
+      "compilerOptions": {
+        "tsConfigPath": "apps/user-service/tsconfig.app.json"
+      }
+    }
   }
 }
