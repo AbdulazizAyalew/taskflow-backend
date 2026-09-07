@@ -98,12 +98,14 @@ The login JWT is at `data.access_token`, matching the original global intercepto
 
 ## Verify
 
-Run `npm run test:gateway:e2e` with the infrastructure running. It builds all three
+Run `npm run test:microservices:e2e` (or `npm run test:gateway:e2e`) with the infrastructure running. It builds all three
 apps, starts isolated service processes and an HTTP gateway on an available port,
-and uses both curl and HTTP requests to exercise the complete round trips.
+and uses curl to exercise the complete round trips. JSON fixtures for registration,
+laptop creation, and shop creation are read directly from the root README.
 
 It checks every route, response wrapping, JWT forwarding, ownership and admin
 access, validation, CORS/Helmet, rate limiting, five-second timeouts, no automatic
 write retries, and broker failures. Temporary databases, RabbitMQ queues, and
-Redis prefixes are cleaned up; development data is not cleared. This verifies
-Issue 4. The README-wide functionality audit remains Issue 5.
+Redis prefixes are cleaned up; development data is not cleared. Issue 5 expands
+this suite with real 60-second cache expiry, shop transaction rollback, and Bull
+notification completion through the gateway. Allow about two minutes.

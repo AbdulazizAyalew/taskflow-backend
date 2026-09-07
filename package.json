@@ -23,7 +23,8 @@
     "start:catalog-service": "nest start catalog-service",
     "test:catalog-service:e2e": "nest build catalog-service && node --test apps/catalog-service/test/rabbitmq.e2e.cjs",
     "start:gateway": "nest start gateway",
-    "test:gateway:e2e": "nest build user-service && nest build catalog-service && nest build gateway && node --test apps/gateway/test/http.e2e.cjs"
+    "test:gateway:e2e": "nest build user-service && nest build catalog-service && nest build gateway && node --test apps/gateway/test/http.e2e.cjs",
+    "test:microservices:e2e": "npm run test:gateway:e2e"
   },
   "dependencies": {
     "@nestjs/bull": "^12.0.0",

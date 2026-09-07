@@ -10,8 +10,19 @@ const { setTimeout: delay } = require('node:timers/promises');
 const { parse } = require('dotenv');
 const { Client } = require('pg');
 const Redis = require('ioredis');
+const Bull = require('bull');
+const { JwtService } = require('@nestjs/jwt');
 const amqp = require('amqplib');
 const runFile = promisify(execFile);
+const readme = readFileSync('README.md', 'utf8');
+
+function exampleBody(heading) {
+  const section = readme.slice(readme.indexOf(heading));
+  const block = /```\s*bash\s*\n([\s\S]*?)```/.exec(section);
+  const payload = block && /-d\s+'([\s\S]*?)'/.exec(block[1]);
+  assert.ok(payload, `README must contain a JSON curl body under ${heading}`);
+  return JSON.parse(payload[1]);
+}
 
 async function stop(child) {
   if (!child || child.exitCode !== null || child.signalCode !== null) return;
@@ -39,7 +50,7 @@ async function scanKeys(redis, prefix) {
   return keys;
 }
 
-test('gateway HTTP → RabbitMQ → services', { timeout: 120000 }, async (t) => {
+test('gateway HTTP → RabbitMQ → services', { timeout: 180000 }, async (t) => {
   const userEnv = {
     ...parse(readFileSync('apps/user-service/.env')),
     ...process.env,
@@ -66,10 +77,18 @@ test('gateway HTTP → RabbitMQ → services', { timeout: 120000 }, async (t) =>
     connectionTimeoutMillis: 5000,
   };
   const admin = new Client({ ...dbOptions, database: 'postgres' });
-  let users, broker, channel, redis, catalogProcess, origin;
+  let users,
+    catalog,
+    broker,
+    channel,
+    redis,
+    notifications,
+    catalogProcess,
+    origin;
 
   t.after(async () => {
     await Promise.all(processes.map(stop));
+    if (notifications) await notifications.close();
     if (redis?.status === 'ready') {
       for (const prefix of [cachePrefix, bullPrefix]) {
         const keys = await scanKeys(redis, prefix);
@@ -83,6 +102,7 @@ test('gateway HTTP → RabbitMQ → services', { timeout: 120000 }, async (t) =>
     }
     if (broker) await broker.close();
     if (users) await users.end();
+    if (catalog) await catalog.end();
     for (const database of createdDatabases)
       await admin.query(`DROP DATABASE "${database}" WITH (FORCE)`);
     await admin.end();
@@ -104,6 +124,8 @@ test('gateway HTTP → RabbitMQ → services', { timeout: 120000 }, async (t) =>
   }
   users = new Client({ ...dbOptions, database: userDb });
   await users.connect();
+  catalog = new Client({ ...dbOptions, database: catalogDb });
+  await catalog.connect();
   broker = await amqp.connect(userEnv.RABBITMQ_URL);
   channel = await broker.createChannel();
   for (const queue of [userQueue, catalogQueue]) {
@@ -121,6 +143,15 @@ test('gateway HTTP → RabbitMQ → services', { timeout: 120000 }, async (t) =>
   });
   redis.on('error', () => {});
   await redis.connect();
+  notifications = new Bull('notifications', {
+    redis: {
+      host: catalogEnv.REDIS_HOST || 'localhost',
+      port: Number(catalogEnv.REDIS_PORT || 6379),
+      db: Number(catalogEnv.REDIS_DB || 0),
+    },
+    prefix: bullPrefix,
+  });
+  await notifications.isReady();
 
   async function start(app, env) {
     const child = spawn(process.execPath, [`dist/apps/${app}/main.js`], {
@@ -196,48 +227,59 @@ test('gateway HTTP → RabbitMQ → services', { timeout: 120000 }, async (t) =>
     headers = {},
     base = origin,
   ) {
-    const response = await fetch(`${base}${path}`, {
-      method,
-      signal: AbortSignal.timeout(8000),
-      headers: {
-        ...(body === undefined ? {} : { 'content-type': 'application/json' }),
-        ...(token ? { authorization: `Bearer ${token}` } : {}),
-        ...headers,
-      },
-      body: body === undefined ? undefined : JSON.stringify(body),
-    });
-    return {
-      status: response.status,
-      headers: response.headers,
-      body: response.status === 204 ? undefined : await response.json(),
-    };
-  }
-  async function curl(method, path, body) {
+    // All API scenarios now run through curl, including protected README routes.
+    // JSON bodies go through stdin, and curl is invoked without shell evaluation.
     const args = [
       '--silent',
       '--show-error',
+      '--http1.1',
+      '--include',
       '--max-time',
       '8',
       '--request',
       method,
       '--write-out',
       '\n%{http_code}',
-      `${origin}${path}`,
+      `${base}${path}`,
     ];
-    if (body !== undefined)
-      args.push(
-        '--header',
-        'Content-Type: application/json',
-        '--data',
-        JSON.stringify(body),
-      );
-    const { stdout } = await runFile('curl', args);
+    const requestHeaders = {
+      ...(body === undefined ? {} : { 'content-type': 'application/json' }),
+      ...(token ? { authorization: `Bearer ${token}` } : {}),
+      ...headers,
+    };
+    for (const [key, value] of Object.entries(requestHeaders))
+      args.push('--header', `${key}: ${value}`);
+    if (body !== undefined) args.push('--data-binary', '@-');
+    const pending = runFile('curl', args);
+    pending.child.stdin.end(
+      body === undefined ? undefined : JSON.stringify(body),
+    );
+    const { stdout } = await pending.catch(() => {
+      throw new Error(`curl failed for ${method} ${path}`);
+    });
     const index = stdout.lastIndexOf('\n');
+    const boundary = stdout.indexOf('\r\n\r\n');
+    assert.ok(boundary >= 0, 'curl must include HTTP headers');
+    const responseHeaders = new Headers();
+    for (const line of stdout.slice(0, boundary).split('\r\n').slice(1)) {
+      const colon = line.indexOf(':');
+      if (colon > 0)
+        responseHeaders.append(
+          line.slice(0, colon),
+          line.slice(colon + 1).trim(),
+        );
+    }
+    const status = Number(stdout.slice(index + 1));
     return {
-      status: Number(stdout.slice(index + 1)),
-      body: JSON.parse(stdout.slice(0, index)),
+      status,
+      headers: responseHeaders,
+      body:
+        status === 204
+          ? undefined
+          : JSON.parse(stdout.slice(boundary + 4, index)),
     };
   }
+  const curl = request;
   function success(result, status) {
     assert.equal(result.status, status);
     assert.deepEqual(Object.keys(result.body).sort(), [
@@ -259,20 +301,15 @@ test('gateway HTTP → RabbitMQ → services', { timeout: 120000 }, async (t) =>
       'success',
     ]);
   }
-  const ownerCredentials = {
-    username: 'gateway_owner',
-    password: 'gateway_password_123',
-  };
+  const ownerCredentials = exampleBody('### 1. Register a new user');
   const otherCredentials = {
     username: 'gateway_other',
     password: 'gateway_password_123',
   };
-  const laptopData = {
-    description: 'Gateway test laptop',
-    brand: 'Dell',
-    ram: 16,
-    price: 1200,
-  };
+  const laptopData = exampleBody('### Create a new laptop (Protected Route)');
+  const shopData = exampleBody(
+    '### Create a Shop AND an initial Laptop (Atomic Transaction)',
+  );
   let owner, ownerToken, otherToken, adminToken, laptop, shop;
 
   await t.test(
@@ -374,7 +411,7 @@ test('gateway HTTP → RabbitMQ → services', { timeout: 120000 }, async (t) =>
         201,
       );
       assert.equal(laptop.userId, owner.id);
-      assert.equal(laptop.price, 1200);
+      assert.equal(laptop.price, laptopData.price);
       failure(
         await request(
           'POST',
@@ -420,12 +457,12 @@ test('gateway HTTP → RabbitMQ → services', { timeout: 120000 }, async (t) =>
           await request(
             'PATCH',
             `/laptops/${laptop.id}`,
-            { price: 1800 },
+            { price: 115000 },
             ownerToken,
           ),
           200,
         ).price,
-        1800,
+        115000,
       );
     },
   );
@@ -435,11 +472,11 @@ test('gateway HTTP → RabbitMQ → services', { timeout: 120000 }, async (t) =>
       const data = success(
         await request(
           'GET',
-          '/laptops?brand=Dell&minPrice=0&sort=price&order=desc&page=1&limit=1',
+          `/laptops?brand=${encodeURIComponent(laptopData.brand)}&minPrice=0&sort=price&order=desc&page=1&limit=1`,
         ),
         200,
       );
-      assert.equal(data.items[0].price, 1800);
+      assert.equal(data.items[0].price, 115000);
       assert.equal(data.meta.limit, 1);
       failure(await request('GET', '/laptops?limit=-1'), 400);
       failure(await request('GET', '/laptops?minPrice=10&maxPrice=1'), 400);
@@ -449,13 +486,7 @@ test('gateway HTTP → RabbitMQ → services', { timeout: 120000 }, async (t) =>
     'public shop routes preserve their URLs and nested request body',
     async () => {
       failure(await request('GET', '/shops'), 404);
-      const result = success(
-        await request('POST', '/shops', {
-          shop: { name: 'Gateway Shop', location: 'Bole' },
-          laptop: laptopData,
-        }),
-        201,
-      );
+      const result = success(await request('POST', '/shops', shopData), 201);
       assert.equal(
         result,
         'New Shop and initial Laptop have been created successfully!',
@@ -470,6 +501,22 @@ test('gateway HTTP → RabbitMQ → services', { timeout: 120000 }, async (t) =>
         success(await request('GET', `/shops/laptop/${laptop.id}`), 200)[0].id,
         shop.id,
       );
+      const jobs = await notifications.getJobs([
+        'waiting',
+        'active',
+        'completed',
+        'failed',
+        'delayed',
+      ]);
+      const job = jobs.find(
+        (job) => job.data.shopId === shop.id && job.data.laptopId === laptop.id,
+      );
+      assert.ok(job, 'Linking through HTTP must enqueue a Bull job');
+      assert.equal(job.name, 'laptop-linked');
+      assert.equal(job.opts.attempts, 3);
+      assert.deepEqual(job.opts.backoff, { type: 'exponential', delay: 5000 });
+      await job.finished();
+      assert.equal(await job.getState(), 'completed');
     },
   );
   await t.test(
@@ -506,6 +553,173 @@ test('gateway HTTP → RabbitMQ → services', { timeout: 120000 }, async (t) =>
         200,
       );
       failure(await request('GET', `/laptops/${laptop.id}`), 404);
+    },
+  );
+  await t.test(
+    "admin can delete other users' laptops but cannot update them",
+    async () => {
+      const otherLaptop = success(
+        await request('POST', '/laptops', laptopData, otherToken),
+        201,
+      );
+      failure(
+        await request(
+          'PATCH',
+          `/laptops/${otherLaptop.id}`,
+          { price: 115000 },
+          adminToken,
+        ),
+        403,
+      );
+      success(
+        await request(
+          'DELETE',
+          `/laptops/${otherLaptop.id}`,
+          undefined,
+          adminToken,
+        ),
+        200,
+      );
+    },
+  );
+  await t.test(
+    'client-supplied IDs from the old README are rejected',
+    async () => {
+      failure(
+        await request(
+          'POST',
+          '/laptops',
+          { ...laptopData, id: 1025 },
+          ownerToken,
+        ),
+        400,
+      );
+    },
+  );
+  await t.test(
+    'expired and forged JWTs are rejected through the gateway',
+    async () => {
+      const expired = new JwtService({ secret: userEnv.JWT_SECRET }).sign(
+        { sub: owner.id, role: 'admin' },
+        { expiresIn: -1 },
+      );
+      const forged = new JwtService({ secret: 'not-the-shared-secret' }).sign(
+        { sub: owner.id, role: 'admin' },
+        { expiresIn: '1h' },
+      );
+      failure(await request('POST', '/laptops', laptopData, expired), 401);
+      failure(await request('POST', '/laptops', laptopData, forged), 401);
+    },
+  );
+  await t.test(
+    'shop validation and a database failure leave neither partial record',
+    async () => {
+      const counts = async () =>
+        (
+          await catalog.query(
+            'SELECT (SELECT count(*)::int FROM laptops) AS laptops, (SELECT count(*)::int FROM shop) AS shops',
+          )
+        ).rows[0];
+      const before = await counts();
+      failure(
+        await request('POST', '/shops', {
+          ...shopData,
+          shop: { name: '', location: 'Bole' },
+        }),
+        400,
+      );
+      assert.deepEqual(await counts(), before);
+      await catalog.query(
+        "ALTER TABLE shop ADD CONSTRAINT gateway_test_rollback CHECK (name <> 'force_rollback')",
+      );
+      try {
+        failure(
+          await request('POST', '/shops', {
+            ...shopData,
+            shop: { name: 'force_rollback', location: 'Bole' },
+          }),
+          500,
+        );
+        assert.deepEqual(await counts(), before);
+      } finally {
+        await catalog.query(
+          'ALTER TABLE shop DROP CONSTRAINT gateway_test_rollback',
+        );
+      }
+    },
+  );
+  await t.test(
+    'README advanced query stays cached for 60 seconds, then refreshes',
+    async () => {
+      const path =
+        '/laptops?brand=Apple&minPrice=50000&maxPrice=200000&sort=price&order=DESC&page=1&limit=5';
+      const first = success(await request('GET', path), 200);
+      assert.equal(first.items.length, 1);
+      assert.equal(first.items[0].brand, 'Apple');
+      assert.equal(first.items[0].price, 150000);
+      const keys = await scanKeys(redis, cachePrefix);
+      const key = keys.find((key) => key.includes('"brand":"Apple"'));
+      assert.ok(key);
+      const ttl = await redis.pttl(key);
+      assert.ok(ttl > 55000 && ttl <= 60000);
+      const extra = success(
+        await request(
+          'POST',
+          '/laptops',
+          { ...shopData.laptop, price: 190000 },
+          ownerToken,
+        ),
+        201,
+      );
+      const cached = success(await request('GET', path), 200);
+      assert.deepEqual(
+        cached,
+        first,
+        'Writes must not invalidate the cached list',
+      );
+      assert.equal(
+        success(await request('GET', `/laptops/${extra.id}`), 200).price,
+        190000,
+      );
+      t.diagnostic(
+        'Waiting for the real 60-second cache expiry; no TTL override is used.',
+      );
+      await delay(30000);
+      await delay(31000);
+      const refreshed = success(await request('GET', path), 200);
+      assert.deepEqual(
+        refreshed.items.map((item) => item.price),
+        [190000, 150000],
+      );
+      assert.deepEqual(refreshed.meta, {
+        total: 2,
+        page: 1,
+        limit: 5,
+        lastPage: 1,
+      });
+      success(
+        await request('DELETE', `/laptops/${extra.id}`, undefined, ownerToken),
+        200,
+      );
+    },
+  );
+  await t.test(
+    'wrong passwords and unknown usernames preserve their HTTP status codes',
+    async () => {
+      failure(
+        await request('POST', '/auth/login', {
+          ...ownerCredentials,
+          password: 'wrong_password_123',
+        }),
+        401,
+      );
+      failure(
+        await request('POST', '/auth/login', {
+          ...ownerCredentials,
+          username: 'unknown_account',
+        }),
+        404,
+      );
     },
   );
   await t.test(
