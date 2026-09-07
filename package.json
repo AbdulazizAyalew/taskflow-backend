@@ -19,7 +19,9 @@
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "test:e2e": "NODE_ENV=apps/taskflow-backend/test jest --config ./test/jest-e2e.json",
     "start:user-service": "nest start user-service",
-    "test:user-service:e2e": "nest build user-service && node --test apps/user-service/test/rabbitmq.e2e.cjs"
+    "test:user-service:e2e": "nest build user-service && node --test apps/user-service/test/rabbitmq.e2e.cjs",
+    "start:catalog-service": "nest start catalog-service",
+    "test:catalog-service:e2e": "nest build catalog-service && node --test apps/catalog-service/test/rabbitmq.e2e.cjs"
   },
   "dependencies": {
     "@nestjs/bull": "^12.0.0",
@@ -42,6 +44,7 @@
     "class-transformer": "^0.5.1",
     "class-validator": "^0.15.1",
     "helmet": "^8.3.0",
+    "ioredis": "5.11.1",
     "joi": "^18.2.5",
     "passport": "^0.7.0",
     "passport-jwt": "^4.0.1",
