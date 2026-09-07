@@ -69,6 +69,6 @@ existing notification processor simulates work rather than contacting a provider
 Queue delivery guarantees and the database/enqueue failure window remain as
 documented in the service READMEs.
 
-The legacy monolith architecture/startup sections and Jest instructions are not the
-microservices verification entry point. Their complete replacement belongs to
-Issue 6; use the per-app run instructions and the command above for this milestone.
+The root README now documents the microservices architecture and startup flow
+(Issue 6). Legacy monolith Jest scripts are explicitly separated from the
+microservices verification entry points.
