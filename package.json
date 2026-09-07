@@ -7,17 +7,24 @@
   "license": "UNLICENSED",
   "scripts": {
     "build": "nest build",
-    "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
+    "format": "prettier --write \"apps/**/*.ts\" \"libs/**/*.ts\"",
     "start": "nest start",
     "start:dev": "nest start --watch",
     "start:debug": "nest start --debug --watch",
-    "start:prod": "node dist/main",
+    "start:prod": "node dist/apps/taskflow-backend/main",
     "lint": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:cov": "jest --coverage",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
-    "test:e2e": "NODE_ENV=test jest --config ./test/jest-e2e.json"
+    "test:e2e": "NODE_ENV=apps/taskflow-backend/test jest --config ./test/jest-e2e.json",
+    "start:user-service": "nest start user-service",
+    "test:user-service:e2e": "nest build user-service && node --test apps/user-service/test/rabbitmq.e2e.cjs",
+    "start:catalog-service": "nest start catalog-service",
+    "test:catalog-service:e2e": "nest build catalog-service && node --test apps/catalog-service/test/rabbitmq.e2e.cjs",
+    "start:gateway": "nest start gateway",
+    "test:gateway:e2e": "nest build user-service && nest build catalog-service && nest build gateway && node --test apps/gateway/test/http.e2e.cjs",
+    "test:microservices:e2e": "npm run test:gateway:e2e"
   },
   "dependencies": {
     "@nestjs/bull": "^12.0.0",
@@ -26,10 +33,13 @@
     "@nestjs/config": "^4.0.4",
     "@nestjs/core": "^11.0.1",
     "@nestjs/jwt": "^11.0.2",
+    "@nestjs/microservices": "11.1.28",
     "@nestjs/passport": "^11.0.5",
     "@nestjs/platform-express": "^11.0.1",
     "@nestjs/throttler": "^6.5.0",
     "@nestjs/typeorm": "^11.0.3",
+    "amqp-connection-manager": "^5.0.0",
+    "amqplib": "^2.0.1",
     "bcrypt": "^6.0.0",
     "bull": "^4.16.5",
     "cache-manager": "^7.2.9",
@@ -37,6 +47,7 @@
     "class-transformer": "^0.5.1",
     "class-validator": "^0.15.1",
     "helmet": "^8.3.0",
+    "ioredis": "5.11.1",
     "joi": "^18.2.5",
     "passport": "^0.7.0",
     "passport-jwt": "^4.0.1",
@@ -80,7 +91,7 @@
       "json",
       "ts"
     ],
-    "rootDir": "src",
+    "rootDir": ".",
     "testRegex": ".*\\.spec\\.ts$",
     "transform": {
       "^.+\\.(t|j)s$": "ts-jest"
@@ -95,7 +106,7 @@
     "transformIgnorePatterns": [
       "node_modules/(?!@nestjs/cache-manager|cache-manager|cache-manager-redis-store)"
     ],
-    "coverageDirectory": "../coverage",
+    "coverageDirectory": "./coverage",
     "testEnvironment": "node",
     "coverageThreshold": {
       "global": {
@@ -107,6 +118,9 @@
     },
     "moduleNameMapper": {
       "^src/(.*)$": "<rootDir>/$1"
-    }
+    },
+    "roots": [
+      "<rootDir>/apps/"
+    ]
   }
 }
