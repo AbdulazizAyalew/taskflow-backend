@@ -22,8 +22,12 @@ export class RpcErrorFilter implements RpcExceptionFilter {
     let statusCode = 500;
     let message: string | string[] = 'Internal server error';
     if (exception instanceof HttpException) {
-      channel.ack(rmqMessage);
       statusCode = exception.getStatus();
+      if (statusCode >= 500) {
+        channel.nack(rmqMessage, false, false);
+      } else {
+        channel.ack(rmqMessage);
+      }
       const response = exception.getResponse();
       message =
         typeof response === 'string'

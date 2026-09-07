@@ -64,6 +64,9 @@ test('gateway HTTP → RabbitMQ → services', { timeout: 180000 }, async (t) =>
   const catalogDb = `gateway_catalog_test_${suffix}`;
   const userQueue = `gateway_users_test_${suffix}`;
   const catalogQueue = `gateway_catalog_test_${suffix}`;
+  const catalogExchange = `gateway_catalog_exchange_${suffix}`;
+  const catalogDlx = `gateway_catalog_dlx_${suffix}`;
+  const catalogDlq = `gateway_catalog_dlq_${suffix}`;
   const cachePrefix = `gateway_cache_test_${suffix}`;
   const bullPrefix = `gateway_bull_test_${suffix}`;
   const processes = [];
@@ -98,6 +101,9 @@ test('gateway HTTP → RabbitMQ → services', { timeout: 180000 }, async (t) =>
     redis?.disconnect();
     if (channel) {
       for (const queue of createdQueues) await channel.deleteQueue(queue);
+      await channel.deleteQueue(catalogDlq);
+      await channel.deleteExchange(catalogExchange);
+      await channel.deleteExchange(catalogDlx);
       await channel.close();
     }
     if (broker) await broker.close();
@@ -128,10 +134,8 @@ test('gateway HTTP → RabbitMQ → services', { timeout: 180000 }, async (t) =>
   await catalog.connect();
   broker = await amqp.connect(userEnv.RABBITMQ_URL);
   channel = await broker.createChannel();
-  for (const queue of [userQueue, catalogQueue]) {
-    await channel.assertQueue(queue, { durable: true });
-    createdQueues.push(queue);
-  }
+  await channel.assertQueue(userQueue, { durable: true });
+  createdQueues.push(userQueue, catalogQueue);
   redis = new Redis({
     host: catalogEnv.REDIS_HOST || 'localhost',
     port: Number(catalogEnv.REDIS_PORT || 6379),
@@ -207,6 +211,10 @@ test('gateway HTTP → RabbitMQ → services', { timeout: 180000 }, async (t) =>
     DB_DATABASE: catalogDb,
     DB_SYNCHRONIZE: 'true',
     RABBITMQ_QUEUE: catalogQueue,
+    RABBITMQ_EXCHANGE: catalogExchange,
+    RABBITMQ_DLX: catalogDlx,
+    RABBITMQ_DLQ: catalogDlq,
+    RABBITMQ_DLQ_ROUTING_KEY: 'gateway.catalog.dead',
     CACHE_PREFIX: cachePrefix,
     BULL_PREFIX: bullPrefix,
   }));
@@ -216,6 +224,7 @@ test('gateway HTTP → RabbitMQ → services', { timeout: 180000 }, async (t) =>
     RABBITMQ_URL: userEnv.RABBITMQ_URL,
     USER_QUEUE: userQueue,
     CATALOG_QUEUE: catalogQueue,
+    CATALOG_EXCHANGE: catalogExchange,
   };
   ({ address: origin } = await start('gateway', gatewayEnv));
 

@@ -41,6 +41,9 @@ test('catalog-service RabbitMQ integration', { timeout: 60000 }, async (t) => {
   const database = `catalog_service_test_${suffix}`;
   const queue = `catalog_service_test_${suffix}`;
   const exchange = `catalog_service_test_exchange_${suffix}`;
+  const deadLetterExchange = `catalog_service_test_dlx_${suffix}`;
+  const deadLetterQueue = `catalog_service_test_dlq_${suffix}`;
+  const deadLetterRoutingKey = 'catalog.test.dead';
   const cachePrefix = `catalog_test_cache_${suffix}`;
   const bullPrefix = `catalog_test_bull_${suffix}`;
   const dbOptions = {
@@ -79,7 +82,9 @@ test('catalog-service RabbitMQ integration', { timeout: 60000 }, async (t) => {
     redis?.disconnect();
     if (channel) {
       await channel.deleteQueue(queue);
+      await channel.deleteQueue(deadLetterQueue);
       await channel.deleteExchange(exchange);
+      await channel.deleteExchange(deadLetterExchange);
       await channel.close();
     }
     if (broker) await broker.close();
@@ -96,7 +101,6 @@ test('catalog-service RabbitMQ integration', { timeout: 60000 }, async (t) => {
   await db.connect();
   broker = await amqp.connect(env.RABBITMQ_URL);
   channel = await broker.createChannel();
-  await channel.assertQueue(queue, { durable: true });
   redis = new Redis({
     ...redisOptions,
     lazyConnect: true,
@@ -120,6 +124,9 @@ test('catalog-service RabbitMQ integration', { timeout: 60000 }, async (t) => {
       DB_SYNCHRONIZE: 'true',
       RABBITMQ_QUEUE: queue,
       RABBITMQ_EXCHANGE: exchange,
+      RABBITMQ_DLX: deadLetterExchange,
+      RABBITMQ_DLQ: deadLetterQueue,
+      RABBITMQ_DLQ_ROUTING_KEY: deadLetterRoutingKey,
       CACHE_PREFIX: cachePrefix,
       BULL_PREFIX: bullPrefix,
       NO_COLOR: '1',
@@ -200,7 +207,9 @@ test('catalog-service RabbitMQ integration', { timeout: 60000 }, async (t) => {
     'standalone service declares its exchange, binding, consumer, and database',
     async () => {
       await channel.checkExchange(exchange);
+      await channel.checkExchange(deadLetterExchange);
       assert.equal((await channel.checkQueue(queue)).consumerCount, 1);
+      assert.equal((await channel.checkQueue(deadLetterQueue)).messageCount, 0);
       const { rows } = await db.query(
         "SELECT tablename FROM pg_tables WHERE schemaname = 'public'",
       );
@@ -506,6 +515,15 @@ test('catalog-service RabbitMQ integration', { timeout: 60000 }, async (t) => {
           500,
         );
         assert.deepEqual(await counts(), before);
+        const deadline = Date.now() + 2000;
+        let deadLetterCount = 0;
+        while (Date.now() < deadline) {
+          deadLetterCount = (await channel.checkQueue(deadLetterQueue))
+            .messageCount;
+          if (deadLetterCount === 1) break;
+          await delay(25);
+        }
+        assert.equal(deadLetterCount, 1);
       } finally {
         await db.query(
           'ALTER TABLE shop DROP CONSTRAINT catalog_test_reject_name',
