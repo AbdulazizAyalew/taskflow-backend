@@ -12,6 +12,7 @@ export const envValidationSchema = Joi.object({
     .uri({ scheme: ['amqp', 'amqps'] })
     .required(),
   RABBITMQ_QUEUE: Joi.string().default('catalog_queue'),
+  RABBITMQ_EXCHANGE: Joi.string().default('catalog_exchange'),
   REDIS_HOST: Joi.string().default('localhost'),
   REDIS_PORT: Joi.number().port().default(6379),
   REDIS_DB: Joi.number().integer().min(0).default(0),

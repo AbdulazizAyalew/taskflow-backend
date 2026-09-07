@@ -1,11 +1,12 @@
 import { Module, ValidationPipe } from '@nestjs/common';
-import { APP_FILTER, APP_PIPE } from '@nestjs/core';
+import { APP_FILTER, APP_INTERCEPTOR, APP_PIPE } from '@nestjs/core';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { JwtModule } from '@nestjs/jwt';
 import { BullModule } from '@nestjs/bull';
 import { envValidationSchema } from './config/env.validation';
 import { RpcErrorFilter } from './common/rpc-error.filter';
+import { RabbitmqAckInterceptor } from './common/rabbitmq-ack.interceptor';
 import { JwtStrategy } from './auth/jwt.strategy';
 import { JwtAuthGuard } from './auth/jwt-auth.guard';
 import { Laptop } from './laptops/laptop.entity';
@@ -72,6 +73,7 @@ import { NotificationsProcessor } from './notifications/notifications.processor'
     ShopsService,
     NotificationsProcessor,
     { provide: APP_FILTER, useClass: RpcErrorFilter },
+    { provide: APP_INTERCEPTOR, useClass: RabbitmqAckInterceptor },
     {
       provide: APP_PIPE,
       useFactory: () =>

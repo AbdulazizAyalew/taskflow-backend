@@ -14,8 +14,11 @@ async function bootstrap() {
       options: {
         urls: [url],
         queue: process.env.RABBITMQ_QUEUE || 'catalog_queue',
-        // As in user-service: do not automatically redeliver writes.
-        noAck: true,
+        exchange: process.env.RABBITMQ_EXCHANGE || 'catalog_exchange',
+        exchangeType: 'direct',
+        wildcards: true,
+        noAck: false,
+        prefetchCount: 10,
         queueOptions: { durable: true },
       },
     },

@@ -41,6 +41,9 @@ import { envValidationSchema } from './config/env.validation';
           options: {
             urls: [config.getOrThrow<string>('RABBITMQ_URL')],
             queue: config.getOrThrow<string>('CATALOG_QUEUE'),
+            exchange: config.getOrThrow<string>('CATALOG_EXCHANGE'),
+            exchangeType: 'direct',
+            wildcards: true,
             queueOptions: { durable: true },
           },
         }),
