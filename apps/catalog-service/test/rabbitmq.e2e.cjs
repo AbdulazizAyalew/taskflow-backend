@@ -40,6 +40,12 @@ test('catalog-service RabbitMQ integration', { timeout: 60000 }, async (t) => {
   const suffix = randomUUID().replaceAll('-', '');
   const database = `catalog_service_test_${suffix}`;
   const queue = `catalog_service_test_${suffix}`;
+  const exchange = `catalog_service_test_exchange_${suffix}`;
+  const deadLetterExchange = `catalog_service_test_dlx_${suffix}`;
+  const deadLetterQueue = `catalog_service_test_dlq_${suffix}`;
+  const deadLetterRoutingKey = 'catalog.test.dead';
+  const eventExchange = `catalog_service_test_events_${suffix}`;
+  const notificationQueue = `catalog_service_test_notifications_${suffix}`;
   const cachePrefix = `catalog_test_cache_${suffix}`;
   const bullPrefix = `catalog_test_bull_${suffix}`;
   const dbOptions = {
@@ -78,6 +84,11 @@ test('catalog-service RabbitMQ integration', { timeout: 60000 }, async (t) => {
     redis?.disconnect();
     if (channel) {
       await channel.deleteQueue(queue);
+      await channel.deleteQueue(deadLetterQueue);
+      await channel.deleteQueue(notificationQueue);
+      await channel.deleteExchange(exchange);
+      await channel.deleteExchange(deadLetterExchange);
+      await channel.deleteExchange(eventExchange);
       await channel.close();
     }
     if (broker) await broker.close();
@@ -94,7 +105,9 @@ test('catalog-service RabbitMQ integration', { timeout: 60000 }, async (t) => {
   await db.connect();
   broker = await amqp.connect(env.RABBITMQ_URL);
   channel = await broker.createChannel();
-  await channel.assertQueue(queue, { durable: true });
+  await channel.assertExchange(eventExchange, 'topic', { durable: true });
+  await channel.assertQueue(notificationQueue, { durable: true });
+  await channel.bindQueue(notificationQueue, eventExchange, 'laptop_created');
   redis = new Redis({
     ...redisOptions,
     lazyConnect: true,
@@ -117,6 +130,12 @@ test('catalog-service RabbitMQ integration', { timeout: 60000 }, async (t) => {
       DB_DATABASE: database,
       DB_SYNCHRONIZE: 'true',
       RABBITMQ_QUEUE: queue,
+      RABBITMQ_EXCHANGE: exchange,
+      RABBITMQ_DLX: deadLetterExchange,
+      RABBITMQ_DLQ: deadLetterQueue,
+      RABBITMQ_DLQ_ROUTING_KEY: deadLetterRoutingKey,
+      RABBITMQ_EVENT_EXCHANGE: eventExchange,
+      NOTIFICATION_QUEUE: notificationQueue,
       CACHE_PREFIX: cachePrefix,
       BULL_PREFIX: bullPrefix,
       NO_COLOR: '1',
@@ -153,6 +172,9 @@ test('catalog-service RabbitMQ integration', { timeout: 60000 }, async (t) => {
     options: {
       urls: [env.RABBITMQ_URL],
       queue,
+      exchange,
+      exchangeType: 'direct',
+      wildcards: true,
       queueOptions: { durable: true },
     },
   });
@@ -191,9 +213,12 @@ test('catalog-service RabbitMQ integration', { timeout: 60000 }, async (t) => {
   let laptop, second, shop;
 
   await t.test(
-    'standalone service has one active consumer and no users table',
+    'standalone service declares its exchange, binding, consumer, and database',
     async () => {
+      await channel.checkExchange(exchange);
+      await channel.checkExchange(deadLetterExchange);
       assert.equal((await channel.checkQueue(queue)).consumerCount, 1);
+      assert.equal((await channel.checkQueue(deadLetterQueue)).messageCount, 0);
       const { rows } = await db.query(
         "SELECT tablename FROM pg_tables WHERE schemaname = 'public'",
       );
@@ -209,6 +234,7 @@ test('catalog-service RabbitMQ integration', { timeout: 60000 }, async (t) => {
         items: [],
         meta: { total: 0, page: 1, limit: 10, lastPage: 0 },
       });
+      assert.equal((await channel.checkQueue(queue)).messageCount, 0);
     },
   );
   await t.test('empty shop list retains its 404', () =>
@@ -269,6 +295,20 @@ test('catalog-service RabbitMQ integration', { timeout: 60000 }, async (t) => {
       assert.ok(Number.isInteger(laptop.id));
       assert.equal(laptop.userId, 42);
       assert.equal(laptop.price, 1000);
+      const deadline = Date.now() + 2000;
+      let eventMessage;
+      while (Date.now() < deadline && !eventMessage) {
+        eventMessage = await channel.get(notificationQueue, { noAck: true });
+        if (!eventMessage) await delay(25);
+      }
+      assert.ok(eventMessage);
+      const event = JSON.parse(eventMessage.content.toString());
+      assert.equal(event.pattern, 'laptop_created');
+      assert.deepEqual(event.data, {
+        laptopId: laptop.id,
+        userId: 42,
+        brand: laptop.brand,
+      });
     },
   );
   await t.test('nested data cannot set ownership', () =>
@@ -498,6 +538,15 @@ test('catalog-service RabbitMQ integration', { timeout: 60000 }, async (t) => {
           500,
         );
         assert.deepEqual(await counts(), before);
+        const deadline = Date.now() + 2000;
+        let deadLetterCount = 0;
+        while (Date.now() < deadline) {
+          deadLetterCount = (await channel.checkQueue(deadLetterQueue))
+            .messageCount;
+          if (deadLetterCount === 1) break;
+          await delay(25);
+        }
+        assert.equal(deadLetterCount, 1);
       } finally {
         await db.query(
           'ALTER TABLE shop DROP CONSTRAINT catalog_test_reject_name',

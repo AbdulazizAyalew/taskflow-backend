@@ -22,8 +22,10 @@
     "test:user-service:e2e": "nest build user-service && node --test apps/user-service/test/rabbitmq.e2e.cjs",
     "start:catalog-service": "nest start catalog-service",
     "test:catalog-service:e2e": "nest build catalog-service && node --test apps/catalog-service/test/rabbitmq.e2e.cjs",
+    "start:notification-service": "nest start notification-service",
+    "test:notification-service:e2e": "nest build notification-service && node --test apps/notification-service/test/rabbitmq.e2e.cjs",
     "start:gateway": "nest start gateway",
-    "test:gateway:e2e": "nest build user-service && nest build catalog-service && nest build gateway && node --test apps/gateway/test/http.e2e.cjs",
+    "test:gateway:e2e": "nest build user-service && nest build catalog-service && nest build notification-service && nest build gateway && node --test apps/gateway/test/http.e2e.cjs",
     "test:microservices:e2e": "npm run test:gateway:e2e"
   },
   "dependencies": {

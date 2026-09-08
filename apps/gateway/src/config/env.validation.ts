@@ -8,4 +8,5 @@ export const envValidationSchema = Joi.object({
     .required(),
   USER_QUEUE: Joi.string().default('user_queue'),
   CATALOG_QUEUE: Joi.string().default('catalog_queue'),
+  CATALOG_EXCHANGE: Joi.string().default('catalog_exchange'),
 });

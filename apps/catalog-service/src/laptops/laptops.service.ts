@@ -1,9 +1,12 @@
 import {
   BadRequestException,
   ForbiddenException,
+  Inject,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
+import type { ClientProxy } from '@nestjs/microservices';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Between, LessThanOrEqual, MoreThanOrEqual, Repository } from 'typeorm';
 import type { FindOptionsWhere } from 'typeorm';
@@ -16,12 +19,19 @@ import {
 } from './dto/laptop-messages.dto';
 import { UserRole } from '../auth/authenticated-user';
 import type { AuthenticatedUser } from '../auth/authenticated-user';
+import {
+  CATALOG_EVENTS_CLIENT,
+  LAPTOP_CREATED_EVENT,
+} from '../events/catalog-events.constants';
 
 @Injectable()
 export class LaptopsService {
+  private readonly logger = new Logger(LaptopsService.name);
+
   constructor(
     @InjectRepository(Laptop) private readonly laptops: Repository<Laptop>,
     private readonly cache: LaptopCache,
+    @Inject(CATALOG_EVENTS_CLIENT) private readonly events: ClientProxy,
   ) {}
 
   async findAll(query: ListLaptopsDto) {
@@ -67,10 +77,21 @@ export class LaptopsService {
     return laptop;
   }
 
-  create(data: CreateLaptopDto, user: AuthenticatedUser) {
-    return this.laptops.save(
+  async create(data: CreateLaptopDto, user: AuthenticatedUser) {
+    const laptop = await this.laptops.save(
       this.laptops.create({ ...data, userId: user.userId }),
     );
+    this.events
+      .emit(LAPTOP_CREATED_EVENT, {
+        laptopId: laptop.id,
+        userId: laptop.userId,
+        brand: laptop.brand,
+      })
+      .subscribe({
+        error: (error: unknown) =>
+          this.logger.error('Could not emit laptop_created event', error),
+      });
+    return laptop;
   }
 
   async update(id: number, data: UpdateLaptopDto, user: AuthenticatedUser) {

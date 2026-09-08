@@ -1,9 +1,9 @@
-# Catalog service — Issue 3
+# Catalog service
 
 Catalog owns laptops and shops in `taskflow_catalog`, independently of the users
 DB. It consumes `catalog_queue` over RabbitMQ and exposes no HTTP listener. The
-old monolith remains available during the staged migration; catalog imports none
-of its code. The gateway routes will be connected in Issue 4.
+old monolith remains available as a migration reference; catalog imports none of
+its code. Gateway routes forward HTTP requests to this service.
 
 ## Start from the repository root
 
@@ -79,12 +79,21 @@ exponential backoff starting at five seconds. Re-linking an existing laptop
 returns the relationship without creating duplicate inventory or a second job.
 Existing jobs in the old monolith's Bull namespace are not migrated.
 
-The link is saved before the notification is enqueued, as before. This is not an
-atomic database-plus-queue transaction; an outbox would be needed to guarantee
-notification delivery across that failure window. RabbitMQ uses durable queue
-definitions and explicit automatic acknowledgement, matching user-service.
-Requests are not redelivered automatically after a consumer crash. A gateway
-timeout cannot cancel a write that is already executing.
+The link is saved before the Bull notification is enqueued, as before. This is
+not an atomic database-plus-queue transaction; an outbox would be needed to
+guarantee delivery across that failure window.
+
+RabbitMQ routes catalog patterns through the durable direct exchange
+`catalog_exchange` into `catalog_queue`. The consumer uses manual acknowledgments:
+successful handlers and expected 4xx results are acknowledged, while unexpected
+5xx failures are rejected into `catalog_dead_letter_queue`. An unacknowledged
+delivery is redelivered if the consumer connection closes.
+
+Creating a laptop also emits the fire-and-forget `laptop_created` event to
+`catalog_events_exchange`; it does not wait for notification-service to reply.
+This publication happens after the database save, so an outbox would still be
+needed for atomic database-and-event delivery. A gateway timeout cannot cancel a
+write that is already executing.
 
 ## Verify
 
