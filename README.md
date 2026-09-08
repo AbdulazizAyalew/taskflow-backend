@@ -1,8 +1,8 @@
 # Taskflow backend
 
 A NestJS monorepo for users, authentication, laptops, and shops. Clients use one
-HTTP gateway; two independent services process requests through RabbitMQ and own
-separate PostgreSQL databases.
+HTTP gateway; independent services process requests and events through RabbitMQ.
+User and catalog data remain in separate PostgreSQL databases.
 
 ## Architecture
 
@@ -12,6 +12,8 @@ flowchart TD
     Gateway <-->|Request and reply| RabbitMQ["RabbitMQ"]
     RabbitMQ <--> Users["user-service"]
     RabbitMQ <--> Catalog["catalog-service"]
+    Catalog -->|laptop_created event| RabbitMQ
+    RabbitMQ --> Notifications["notification-service"]
     Users --> UserDB[("taskflow_users")]
     Catalog --> CatalogDB[("taskflow_catalog")]
     Catalog -->|Laptop list cache| Redis[("Redis")]
@@ -28,8 +30,10 @@ responsibilities, so both brokers remain in the project.
 | Gateway | HTTP routes, validation, response formatting, rate limits, Helmet and CORS | `npm run start:gateway` | [Gateway README](apps/gateway/README.md) |
 | user-service | Registration, password hashes, login, JWT issuing, admin user list | `npm run start:user-service` | [User README](apps/user-service/README.md) |
 | catalog-service | Laptops, shops, ownership, local transactions, caching and notifications | `npm run start:catalog-service` | [Catalog README](apps/catalog-service/README.md) |
+| notification-service | `laptop_created` event handling, retries and failed-event storage | `npm run start:notification-service` | [Notification README](apps/notification-service/README.md) |
 
-The apps live in `apps/gateway`, `apps/user-service`, and `apps/catalog-service`.
+The apps live in `apps/gateway`, `apps/user-service`, `apps/catalog-service`, and
+`apps/notification-service`.
 They share the repository and dependency installation but run as separate
 processes. Only the gateway listens for HTTP; the other apps consume RabbitMQ
 queues.
@@ -80,6 +84,7 @@ These commands preserve existing files:
 test -f apps/user-service/.env || cp apps/user-service/.env.example apps/user-service/.env
 test -f apps/catalog-service/.env || cp apps/catalog-service/.env.example apps/catalog-service/.env
 test -f apps/gateway/.env || cp apps/gateway/.env.example apps/gateway/.env
+test -f apps/notification-service/.env || cp apps/notification-service/.env.example apps/notification-service/.env
 ```
 
 Generate a secret once:
@@ -94,21 +99,21 @@ if both apps are already configured. The gateway does not need a JWT secret.
 
 The example files already contain the local Docker connection settings:
 
-| Setting | user-service | catalog-service | Gateway |
-| --- | --- | --- | --- |
-| Database | `taskflow_users` | `taskflow_catalog` | None |
-| Database host/port | `localhost:5434` | `localhost:5434` | None |
-| RabbitMQ request queue | `RABBITMQ_QUEUE=user_queue` | `RABBITMQ_QUEUE=catalog_queue` | `USER_QUEUE=user_queue`, `CATALOG_QUEUE=catalog_queue` |
-| RabbitMQ URL | `amqp://taskflow:taskflow_local@localhost:5672` | Same broker | Same broker |
-| Redis | None | `localhost:6379`, database 0 | None |
-| HTTP port | None | None | `PORT=3000` |
+| Setting | user-service | catalog-service | notification-service | Gateway |
+| --- | --- | --- | --- | --- |
+| Database | `taskflow_users` | `taskflow_catalog` | None | None |
+| Database host/port | `localhost:5434` | `localhost:5434` | None | None |
+| RabbitMQ queue | `user_queue` | `catalog_queue` | `notification_queue` | Publishes to service queues |
+| RabbitMQ URL | Local broker | Local broker | Local broker | Local broker |
+| Redis | None | `localhost:6379`, database 0 | None | None |
+| HTTP port | None | None | None | `PORT=3000` |
 
 Environment files are ignored by Git. The service-specific files are loaded
 relative to the repository root; the root monolith `.env` is not their config.
 
-### 4. Start all three applications
+### 4. Start all four applications
 
-Use three terminals, each at the repository root.
+Use four terminals, each at the repository root.
 
 Terminal 1:
 
@@ -125,19 +130,27 @@ npm run start:catalog-service
 Terminal 3:
 
 ```bash
+npm run start:notification-service
+```
+
+Terminal 4:
+
+```bash
 npm run start:gateway
 ```
 
 The services should report `Nest microservice successfully started`; the gateway
 reports its HTTP address. For watch mode, use `npx nest start user-service --watch`,
-`npx nest start catalog-service --watch`, or `npx nest start gateway --watch`.
+`npx nest start catalog-service --watch`,
+`npx nest start notification-service --watch`, or
+`npx nest start gateway --watch`.
 
 ### 5. Verify the running system
 
 Open [RabbitMQ management](http://localhost:15672) and log in with username
 `taskflow` and password `taskflow_local`. Under **Queues and Streams**,
-`user_queue` and `catalog_queue` should each have one consumer for one running
-instance of each service.
+`user_queue`, `catalog_queue`, and `notification_queue` should each have one
+consumer for one running instance of each service.
 
 ```bash
 curl http://localhost:3000/laptops
@@ -146,6 +159,10 @@ curl http://localhost:3000/laptops
 A fresh database returns HTTP 200 with an empty `data.items` array. Use the auth
 examples below to register and log in. The gateway stays on the old API's port,
 so stop the old monolith if it already occupies port 3000.
+
+After creating a laptop through `POST /laptops`, the notification-service terminal
+logs `Simulated notification for laptop_created`. The HTTP response comes from
+catalog-service and does not wait for that event listener.
 
 ### Stop and restart
 
@@ -191,6 +208,55 @@ Tokens use HS256, contain `sub`, `username`, and `role`, and expire after one ho
 Both services holding the shared secret can sign as well as verify tokens.
 Changing or deleting an account does not immediately revoke existing tokens.
 Role promotion requires a new login to obtain the updated role in a new token.
+
+## RabbitMQ routing and reliability
+
+RabbitMQ publishers send to an exchange. A binding matches a routing key and
+places the message in a queue; a consumer reads from that queue. Nest's message
+or event pattern is also used as the routing key in this project.
+
+| Purpose | Exchange | Type | Routing key | Queue | Consumer |
+| --- | --- | --- | --- | --- | --- |
+| Catalog request/reply | `catalog_exchange` | direct | Exact `catalog.*` message pattern | `catalog_queue` | catalog-service |
+| Laptop-created event | `catalog_events_exchange` | topic | `laptop_created` | `notification_queue` | notification-service |
+| Notification retry delay | `notification_retry_exchange` | direct | `laptop_created` | `notification_retry_queue` | No consumer; expires back to the event exchange |
+| Catalog failures | `catalog_dead_letter_exchange` | direct | `catalog.dead` | `catalog_dead_letter_queue` | Human inspection |
+| Exhausted notification failures | `notification_dead_letter_exchange` | direct | `notification.dead` | `notification_dead_letter_queue` | Human inspection |
+
+For the public laptop list, the gateway publishes routing key
+`catalog.laptops.findAll`; the explicit binding sends it to `catalog_queue`, where
+catalog-service acknowledges it only after the list handler succeeds.
+
+The gateway uses request-response for catalog operations: `ClientProxy.send()`
+publishes a request with a correlation ID and reply address, then waits for one
+reply. Catalog handlers use `@MessagePattern()`. The `laptop_created` notification
+uses the event pattern instead: catalog calls `ClientProxy.emit()` after saving a
+laptop, does not wait for a listener reply, and notification-service consumes it
+with `@EventPattern()`.
+
+Catalog and notification consumers use manual acknowledgments. Successful work
+is acknowledged only after its handler finishes. Expected 4xx catalog errors are
+also acknowledged because retrying invalid input or denied access cannot make it
+succeed. Unexpected 5xx catalog failures are rejected and RabbitMQ routes them to
+`catalog_dead_letter_queue`. If a process loses its connection before acking or
+rejecting a delivery, RabbitMQ makes that unacknowledged delivery available for
+redelivery.
+
+Notification failures have three total processing attempts. After attempt one,
+the message waits 500 ms in `notification_retry_queue`; after attempt two, it
+waits 1000 ms. The queue's TTL dead-letters each expired message back to
+`catalog_events_exchange` with the original `laptop_created` routing key. A third
+failure is published to `notification_dead_letter_queue`. The
+`x-retry-attempt` header records progress. Retry publication succeeds before the
+original delivery is acknowledged, avoiding a gap where the failed event is
+removed without its replacement being scheduled.
+
+The retry delay, attempt limit, exchanges, queues, and DLQ routing keys can be
+changed with the variables in the service `.env.example` files. Durable queues
+and persistent publications survive a broker restart when RabbitMQ has flushed
+them to its named volume. Manual acknowledgments protect processing after
+delivery; they do not make handlers idempotent, guarantee that replies reach a
+timed-out caller, or make a database write and event publication atomic.
 
 ## Data ownership and permissions
 
@@ -245,10 +311,6 @@ automatically retry writes. Missing replies return HTTP 504; broker connection
 failures return 503. Requests carry a five-second RabbitMQ expiry, but timing out
 does not cancel or roll back a write already delivered to a service.
 
-Both services use durable RabbitMQ queue definitions and automatic
-acknowledgement. A consumer crash can therefore lose an already delivered request;
-durable queue definitions alone do not guarantee message processing or replies.
-
 ## HTTP response contract and security
 
 The gateway owns validation, response formatting, Helmet, CORS, and HTTP rate
@@ -287,17 +349,20 @@ Start infrastructure and configure the app environment files first. Then run:
 ```bash
 npm run test:user-service:e2e
 npm run test:catalog-service:e2e
+npm run test:notification-service:e2e
 npm run test:microservices:e2e
 ```
 
-The first two commands test their service over RabbitMQ. The last builds all
-three apps and runs the complete curl suite through an isolated gateway, including
-the README payloads, auth, ownership, transaction rollback, notification
-completion, rate limits, and failures. It waits for the real 60-second cache
-expiry; allow about two minutes.
+The service commands test their consumers over RabbitMQ. The notification test
+forces processing failures and verifies the 500 ms and 1000 ms retries before the
+third failure reaches its DLQ. The last command builds all four apps and runs the
+complete curl suite through an isolated gateway, including the README payloads,
+auth, ownership, transaction rollback, both notification mechanisms, rate limits,
+and failures. It waits for the real 60-second cache expiry; allow about two
+minutes.
 
-Tests create uniquely named databases, RabbitMQ queues, and Redis prefixes, then
-remove only their own resources. The configured local PostgreSQL account needs
+Tests create uniquely named databases, RabbitMQ topology, and Redis prefixes,
+then remove only their own resources. The configured local PostgreSQL account needs
 permission to create and drop test databases. An assertion failure still runs
 cleanup; forcibly terminating the test can leave temporary resources behind.
 
@@ -311,6 +376,7 @@ To compile without starting the applications:
 ```bash
 npx nest build user-service
 npx nest build catalog-service
+npx nest build notification-service
 npx nest build gateway
 ```
 
@@ -324,6 +390,9 @@ npx nest build gateway
 | RabbitMQ connection refused | Check the container and AMQP port 5672; 15672 is only the dashboard |
 | Queue has zero consumers | Start its service and check startup logs |
 | Unexpected replies or multiple consumers | Stop any old placeholder processes still consuming the same queue |
+| RabbitMQ reports inequivalent queue arguments | Stop catalog-service, delete an empty pre-milestone `catalog_queue` once, then restart so it is declared with DLQ arguments |
+| `laptop_created` is not logged | Start notification-service and confirm `notification_queue` is bound to `catalog_events_exchange` |
+| Notification keeps failing | Inspect `notification_dead_letter_queue` and its `x-retry-attempt` header in the management UI |
 | Catalog rejects a valid login token | Check the shared JWT secret, token expiry, and the raw bearer token |
 | HTTP 429 while testing | Wait for the route's rate-limit window to reset |
 | Laptop list looks outdated | The agreed cache policy allows stale results for up to 60 seconds |
@@ -334,7 +403,12 @@ npx nest build gateway
 
 To modify laptops, you must first register and log in to receive an access token. Note: All endpoints validate incoming data; passing invalid data will result in a 400 Bad Request.
 
-These examples target the gateway on port 3000. Start it and both services using [the gateway run instructions](apps/gateway/README.md). Replace token and ID placeholders with values returned by your requests; database IDs are generated automatically. When creating records for the first time, run the create example before the read/update/delete examples that use its ID. If you hit a rate limit while running examples quickly, wait for that route's window to reset.
+These examples target the gateway on port 3000. Start the gateway and services
+using the instructions above. Replace token and ID placeholders with values
+returned by your requests; database IDs are generated automatically. When
+creating records for the first time, run the create example before the
+read/update/delete examples that use its ID. If you hit a rate limit while running
+examples quickly, wait for that route's window to reset.
 
 ### 1. Register a new user
 
