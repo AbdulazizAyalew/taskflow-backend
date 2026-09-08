@@ -4,6 +4,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { JwtModule } from '@nestjs/jwt';
 import { BullModule } from '@nestjs/bull';
+import { ClientsModule, Transport } from '@nestjs/microservices';
 import { envValidationSchema } from './config/env.validation';
 import { RpcErrorFilter } from './common/rpc-error.filter';
 import { RabbitmqAckInterceptor } from './common/rabbitmq-ack.interceptor';
@@ -17,6 +18,7 @@ import { Shop } from './shops/shop.entity';
 import { ShopsController } from './shops/shops.controller';
 import { ShopsService } from './shops/shops.service';
 import { NotificationsProcessor } from './notifications/notifications.processor';
+import { CATALOG_EVENTS_CLIENT } from './events/catalog-events.constants';
 
 @Module({
   imports: [
@@ -40,6 +42,23 @@ import { NotificationsProcessor } from './notifications/notifications.processor'
       }),
     }),
     TypeOrmModule.forFeature([Laptop, Shop]),
+    ClientsModule.registerAsync([
+      {
+        name: CATALOG_EVENTS_CLIENT,
+        inject: [ConfigService],
+        useFactory: (config: ConfigService) => ({
+          transport: Transport.RMQ,
+          options: {
+            urls: [config.getOrThrow<string>('RABBITMQ_URL')],
+            queue: config.getOrThrow<string>('NOTIFICATION_QUEUE'),
+            exchange: config.getOrThrow<string>('RABBITMQ_EVENT_EXCHANGE'),
+            exchangeType: 'topic',
+            wildcards: true,
+            persistent: true,
+          },
+        }),
+      },
+    ]),
     JwtModule.registerAsync({
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({

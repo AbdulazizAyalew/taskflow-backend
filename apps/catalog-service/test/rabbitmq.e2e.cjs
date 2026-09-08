@@ -44,6 +44,8 @@ test('catalog-service RabbitMQ integration', { timeout: 60000 }, async (t) => {
   const deadLetterExchange = `catalog_service_test_dlx_${suffix}`;
   const deadLetterQueue = `catalog_service_test_dlq_${suffix}`;
   const deadLetterRoutingKey = 'catalog.test.dead';
+  const eventExchange = `catalog_service_test_events_${suffix}`;
+  const notificationQueue = `catalog_service_test_notifications_${suffix}`;
   const cachePrefix = `catalog_test_cache_${suffix}`;
   const bullPrefix = `catalog_test_bull_${suffix}`;
   const dbOptions = {
@@ -83,8 +85,10 @@ test('catalog-service RabbitMQ integration', { timeout: 60000 }, async (t) => {
     if (channel) {
       await channel.deleteQueue(queue);
       await channel.deleteQueue(deadLetterQueue);
+      await channel.deleteQueue(notificationQueue);
       await channel.deleteExchange(exchange);
       await channel.deleteExchange(deadLetterExchange);
+      await channel.deleteExchange(eventExchange);
       await channel.close();
     }
     if (broker) await broker.close();
@@ -101,6 +105,9 @@ test('catalog-service RabbitMQ integration', { timeout: 60000 }, async (t) => {
   await db.connect();
   broker = await amqp.connect(env.RABBITMQ_URL);
   channel = await broker.createChannel();
+  await channel.assertExchange(eventExchange, 'topic', { durable: true });
+  await channel.assertQueue(notificationQueue, { durable: true });
+  await channel.bindQueue(notificationQueue, eventExchange, 'laptop_created');
   redis = new Redis({
     ...redisOptions,
     lazyConnect: true,
@@ -127,6 +134,8 @@ test('catalog-service RabbitMQ integration', { timeout: 60000 }, async (t) => {
       RABBITMQ_DLX: deadLetterExchange,
       RABBITMQ_DLQ: deadLetterQueue,
       RABBITMQ_DLQ_ROUTING_KEY: deadLetterRoutingKey,
+      RABBITMQ_EVENT_EXCHANGE: eventExchange,
+      NOTIFICATION_QUEUE: notificationQueue,
       CACHE_PREFIX: cachePrefix,
       BULL_PREFIX: bullPrefix,
       NO_COLOR: '1',
@@ -286,6 +295,20 @@ test('catalog-service RabbitMQ integration', { timeout: 60000 }, async (t) => {
       assert.ok(Number.isInteger(laptop.id));
       assert.equal(laptop.userId, 42);
       assert.equal(laptop.price, 1000);
+      const deadline = Date.now() + 2000;
+      let eventMessage;
+      while (Date.now() < deadline && !eventMessage) {
+        eventMessage = await channel.get(notificationQueue, { noAck: true });
+        if (!eventMessage) await delay(25);
+      }
+      assert.ok(eventMessage);
+      const event = JSON.parse(eventMessage.content.toString());
+      assert.equal(event.pattern, 'laptop_created');
+      assert.deepEqual(event.data, {
+        laptopId: laptop.id,
+        userId: 42,
+        brand: laptop.brand,
+      });
     },
   );
   await t.test('nested data cannot set ownership', () =>

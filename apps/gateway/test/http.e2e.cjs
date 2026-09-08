@@ -67,6 +67,8 @@ test('gateway HTTP → RabbitMQ → services', { timeout: 180000 }, async (t) =>
   const catalogExchange = `gateway_catalog_exchange_${suffix}`;
   const catalogDlx = `gateway_catalog_dlx_${suffix}`;
   const catalogDlq = `gateway_catalog_dlq_${suffix}`;
+  const catalogEventExchange = `gateway_catalog_events_${suffix}`;
+  const notificationQueue = `gateway_notifications_${suffix}`;
   const cachePrefix = `gateway_cache_test_${suffix}`;
   const bullPrefix = `gateway_bull_test_${suffix}`;
   const processes = [];
@@ -87,6 +89,7 @@ test('gateway HTTP → RabbitMQ → services', { timeout: 180000 }, async (t) =>
     redis,
     notifications,
     catalogProcess,
+    notificationOutput,
     origin;
 
   t.after(async () => {
@@ -102,8 +105,10 @@ test('gateway HTTP → RabbitMQ → services', { timeout: 180000 }, async (t) =>
     if (channel) {
       for (const queue of createdQueues) await channel.deleteQueue(queue);
       await channel.deleteQueue(catalogDlq);
+      await channel.deleteQueue(notificationQueue);
       await channel.deleteExchange(catalogExchange);
       await channel.deleteExchange(catalogDlx);
+      await channel.deleteExchange(catalogEventExchange);
       await channel.close();
     }
     if (broker) await broker.close();
@@ -165,12 +170,12 @@ test('gateway HTTP → RabbitMQ → services', { timeout: 180000 }, async (t) =>
     });
     processes.push(child);
     let address;
+    let output = '';
     await new Promise((resolveReady, reject) => {
       const timer = setTimeout(
         () => reject(new Error(`${app} startup timed out`)),
         20000,
       );
-      let output = '';
       child.stdout.on('data', (chunk) => {
         output += chunk.toString();
         const match = output.match(/Gateway listening at (http:\/\/[^\s]+)/);
@@ -194,7 +199,7 @@ test('gateway HTTP → RabbitMQ → services', { timeout: 180000 }, async (t) =>
         reject(new Error(`${app} exited before readiness (code ${code})`));
       });
     });
-    return { child, address };
+    return { child, address, getOutput: () => output };
   }
   await start('user-service', {
     ...userEnv,
@@ -202,6 +207,11 @@ test('gateway HTTP → RabbitMQ → services', { timeout: 180000 }, async (t) =>
     DB_SYNCHRONIZE: 'true',
     RABBITMQ_QUEUE: userQueue,
   });
+  ({ getOutput: notificationOutput } = await start('notification-service', {
+    RABBITMQ_URL: userEnv.RABBITMQ_URL,
+    RABBITMQ_QUEUE: notificationQueue,
+    RABBITMQ_EVENT_EXCHANGE: catalogEventExchange,
+  }));
   ({ child: catalogProcess } = await start('catalog-service', {
     ...catalogEnv,
     DB_HOST: userEnv.DB_HOST,
@@ -215,6 +225,8 @@ test('gateway HTTP → RabbitMQ → services', { timeout: 180000 }, async (t) =>
     RABBITMQ_DLX: catalogDlx,
     RABBITMQ_DLQ: catalogDlq,
     RABBITMQ_DLQ_ROUTING_KEY: 'gateway.catalog.dead',
+    RABBITMQ_EVENT_EXCHANGE: catalogEventExchange,
+    NOTIFICATION_QUEUE: notificationQueue,
     CACHE_PREFIX: cachePrefix,
     BULL_PREFIX: bullPrefix,
   }));
@@ -421,6 +433,20 @@ test('gateway HTTP → RabbitMQ → services', { timeout: 180000 }, async (t) =>
       );
       assert.equal(laptop.userId, owner.id);
       assert.equal(laptop.price, laptopData.price);
+      const notificationDeadline = Date.now() + 2000;
+      while (
+        Date.now() < notificationDeadline &&
+        !notificationOutput().includes(
+          'Simulated notification for laptop_created',
+        )
+      ) {
+        await delay(25);
+      }
+      assert.match(
+        notificationOutput(),
+        /Simulated notification for laptop_created/,
+      );
+      assert.match(notificationOutput(), new RegExp(`"laptopId":${laptop.id}`));
       failure(
         await request(
           'POST',
