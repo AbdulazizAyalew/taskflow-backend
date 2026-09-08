@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { envValidationSchema } from './config/env.validation';
 import { NotificationServiceController } from './notification-service.controller';
+import { RetryService } from './rabbitmq/retry.service';
 
 @Module({
   imports: [
@@ -12,5 +13,6 @@ import { NotificationServiceController } from './notification-service.controller
     }),
   ],
   controllers: [NotificationServiceController],
+  providers: [RetryService],
 })
 export class NotificationServiceModule {}

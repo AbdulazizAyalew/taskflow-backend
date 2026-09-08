@@ -69,6 +69,10 @@ test('gateway HTTP → RabbitMQ → services', { timeout: 180000 }, async (t) =>
   const catalogDlq = `gateway_catalog_dlq_${suffix}`;
   const catalogEventExchange = `gateway_catalog_events_${suffix}`;
   const notificationQueue = `gateway_notifications_${suffix}`;
+  const notificationRetryExchange = `gateway_notification_retry_${suffix}`;
+  const notificationRetryQueue = `gateway_notification_retry_queue_${suffix}`;
+  const notificationDlx = `gateway_notification_dlx_${suffix}`;
+  const notificationDlq = `gateway_notification_dlq_${suffix}`;
   const cachePrefix = `gateway_cache_test_${suffix}`;
   const bullPrefix = `gateway_bull_test_${suffix}`;
   const processes = [];
@@ -106,9 +110,13 @@ test('gateway HTTP → RabbitMQ → services', { timeout: 180000 }, async (t) =>
       for (const queue of createdQueues) await channel.deleteQueue(queue);
       await channel.deleteQueue(catalogDlq);
       await channel.deleteQueue(notificationQueue);
+      await channel.deleteQueue(notificationRetryQueue);
+      await channel.deleteQueue(notificationDlq);
       await channel.deleteExchange(catalogExchange);
       await channel.deleteExchange(catalogDlx);
       await channel.deleteExchange(catalogEventExchange);
+      await channel.deleteExchange(notificationRetryExchange);
+      await channel.deleteExchange(notificationDlx);
       await channel.close();
     }
     if (broker) await broker.close();
@@ -211,6 +219,11 @@ test('gateway HTTP → RabbitMQ → services', { timeout: 180000 }, async (t) =>
     RABBITMQ_URL: userEnv.RABBITMQ_URL,
     RABBITMQ_QUEUE: notificationQueue,
     RABBITMQ_EVENT_EXCHANGE: catalogEventExchange,
+    RABBITMQ_RETRY_EXCHANGE: notificationRetryExchange,
+    RABBITMQ_RETRY_QUEUE: notificationRetryQueue,
+    RABBITMQ_DLX: notificationDlx,
+    RABBITMQ_DLQ: notificationDlq,
+    RABBITMQ_DLQ_ROUTING_KEY: 'gateway.notification.dead',
   }));
   ({ child: catalogProcess } = await start('catalog-service', {
     ...catalogEnv,
