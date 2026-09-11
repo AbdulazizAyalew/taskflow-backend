@@ -16,7 +16,7 @@ import {
   UpdateLaptopDto,
   ListLaptopsDto,
   LaptopIdDto,
-} from '../dto/catalog.dto';
+} from '@app/shared';
 
 @Controller('laptops')
 export class LaptopsController {

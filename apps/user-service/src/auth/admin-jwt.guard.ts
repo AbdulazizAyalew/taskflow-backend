@@ -6,7 +6,8 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import { UserRole } from '../users/user.entity';
+import { UserRole } from '@app/shared';
+import type { JwtPayload } from '@app/shared';
 
 @Injectable()
 export class AdminJwtGuard implements CanActivate {
@@ -18,7 +19,7 @@ export class AdminJwtGuard implements CanActivate {
       throw new UnauthorizedException('A valid token is required');
     }
 
-    let claims: { sub?: number; exp?: number; role?: UserRole };
+    let claims: Partial<JwtPayload>;
     try {
       claims = await this.jwt.verifyAsync(data.token);
       if (

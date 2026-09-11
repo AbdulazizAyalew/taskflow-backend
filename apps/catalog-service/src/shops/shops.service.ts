@@ -9,7 +9,7 @@ import { InjectQueue } from '@nestjs/bull';
 import type { Queue } from 'bull';
 import { Shop } from './shop.entity';
 import { Laptop } from '../laptops/laptop.entity';
-import { CreateShopMessage } from './dto/shop-messages.dto';
+import { CreateShopMessage } from '@app/shared';
 
 @Injectable()
 export class ShopsService {

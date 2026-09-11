@@ -78,7 +78,7 @@ export class ListLaptopsDto {
   @IsIn(['id', 'description', 'brand', 'ram', 'price', 'userId'])
   sort: 'id' | 'description' | 'brand' | 'ram' | 'price' | 'userId' = 'id';
 
-  @Transform(({ value }) =>
+  @Transform(({ value }: { value: unknown }) =>
     typeof value === 'string' ? value.toUpperCase() : value,
   )
   @IsIn(['ASC', 'DESC'])

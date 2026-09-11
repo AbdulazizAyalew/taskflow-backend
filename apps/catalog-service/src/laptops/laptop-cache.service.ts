@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import Redis from 'ioredis';
-import { ListLaptopsDto } from './dto/laptop-messages.dto';
+import { ListLaptopsDto } from '@app/shared';
 
 @Injectable()
 export class LaptopCache implements OnModuleInit, OnModuleDestroy {

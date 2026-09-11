@@ -8,7 +8,7 @@ import {
   IsString,
   ValidateNested,
 } from 'class-validator';
-import { CreateLaptopDto } from '../../laptops/dto/laptop-messages.dto';
+import { CreateLaptopDto } from './laptop.dto';
 
 export class CreateShopDto {
   @IsString()

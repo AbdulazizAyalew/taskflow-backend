@@ -1,8 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { User, UserRole } from './user.entity';
-import type { PublicUser } from './user.entity';
+import { User } from './user.entity';
+import { UserRole } from '@app/shared';
+import type { PublicUser } from '@app/shared';
 
 @Injectable()
 export class UsersService {

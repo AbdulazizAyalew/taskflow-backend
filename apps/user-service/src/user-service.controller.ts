@@ -1,8 +1,8 @@
 import { Controller, UseGuards } from '@nestjs/common';
 import { MessagePattern, Payload } from '@nestjs/microservices';
 import { AuthService } from './auth/auth.service';
-import { LoginDto } from './auth/dto/login.dto';
-import { RegisterDto } from './auth/dto/register.dto';
+import { LoginDto } from '@app/shared';
+import { RegisterDto } from '@app/shared';
 import { AdminJwtGuard } from './auth/admin-jwt.guard';
 import { UsersService } from './users/users.service';
 
