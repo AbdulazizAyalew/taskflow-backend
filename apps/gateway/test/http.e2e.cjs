@@ -93,6 +93,7 @@ test('gateway HTTP → RabbitMQ → services', { timeout: 180000 }, async (t) =>
     redis,
     notifications,
     catalogProcess,
+    userProcess,
     notificationOutput,
     origin;
 
@@ -209,12 +210,13 @@ test('gateway HTTP → RabbitMQ → services', { timeout: 180000 }, async (t) =>
     });
     return { child, address, getOutput: () => output };
   }
-  await start('user-service', {
+  const userServiceEnv = {
     ...userEnv,
     DB_DATABASE: userDb,
     DB_SYNCHRONIZE: 'true',
     RABBITMQ_QUEUE: userQueue,
-  });
+  };
+  ({ child: userProcess } = await start('user-service', userServiceEnv));
   ({ getOutput: notificationOutput } = await start('notification-service', {
     RABBITMQ_URL: userEnv.RABBITMQ_URL,
     RABBITMQ_QUEUE: notificationQueue,
@@ -823,6 +825,39 @@ test('gateway HTTP → RabbitMQ → services', { timeout: 180000 }, async (t) =>
     }
     assert.ok(limited);
   });
+  await t.test(
+    'user calls and owner lookup time out cleanly when users are offline',
+    async () => {
+      const owned = success(
+        await request('POST', '/laptops', laptopData, ownerToken),
+        201,
+      );
+      await stop(userProcess);
+      try {
+        for (const path of ['/users', `/laptops/${owned.id}`]) {
+          const started = performance.now();
+          const response = await request('GET', path, undefined, adminToken);
+          failure(response, 504);
+          assert.equal(
+            response.body.message,
+            'Service did not respond within 5 seconds',
+          );
+          const elapsed = performance.now() - started;
+          assert.ok(elapsed >= 4800 && elapsed < 6500);
+        }
+        success(await request('GET', '/laptops'), 200);
+        await delay(100);
+        assert.equal((await channel.checkQueue(userQueue)).messageCount, 0);
+      } finally {
+        ({ child: userProcess } = await start('user-service', userServiceEnv));
+      }
+      const recovered = success(
+        await request('GET', `/laptops/${owned.id}`),
+        200,
+      );
+      assert.equal(recovered.owner.id, owner.id);
+    },
+  );
   await t.test(
     'an offline catalog returns 504 within five seconds, while users still work',
     async () => {
