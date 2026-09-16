@@ -551,6 +551,8 @@ test('gateway HTTP → RabbitMQ → services', { timeout: 180000 }, async (t) =>
       );
       assert.equal(ownerless.userId, null);
       assert.equal(ownerless.owner, null);
+      assert.equal(ownerless.partial, false);
+      assert.equal(ownerless.ownerStatus, 'unassigned');
       const linked = success(
         await request('POST', `/shops/${shop.id}/laptops/${laptop.id}`),
         201,
@@ -826,7 +828,7 @@ test('gateway HTTP → RabbitMQ → services', { timeout: 180000 }, async (t) =>
     assert.ok(limited);
   });
   await t.test(
-    'user calls and owner lookup time out cleanly when users are offline',
+    'user calls time out while laptop details return partial data and recover',
     async () => {
       const owned = success(
         await request('POST', '/laptops', laptopData, ownerToken),
@@ -837,11 +839,20 @@ test('gateway HTTP → RabbitMQ → services', { timeout: 180000 }, async (t) =>
         for (const path of ['/users', `/laptops/${owned.id}`]) {
           const started = performance.now();
           const response = await request('GET', path, undefined, adminToken);
-          failure(response, 504);
-          assert.equal(
-            response.body.message,
-            'Service did not respond within 5 seconds',
-          );
+          if (path === '/users') {
+            failure(response, 504);
+            assert.equal(
+              response.body.message,
+              'Service did not respond within 5 seconds',
+            );
+          } else {
+            const details = success(response, 200);
+            assert.equal(details.id, owned.id);
+            assert.equal(details.description, owned.description);
+            assert.equal(details.owner, null);
+            assert.equal(details.partial, true);
+            assert.equal(details.ownerStatus, 'unavailable');
+          }
           const elapsed = performance.now() - started;
           assert.ok(elapsed >= 4800 && elapsed < 6500);
         }
@@ -856,6 +867,19 @@ test('gateway HTTP → RabbitMQ → services', { timeout: 180000 }, async (t) =>
         200,
       );
       assert.equal(recovered.owner.id, owner.id);
+      assert.equal(recovered.partial, false);
+      assert.equal(recovered.ownerStatus, 'available');
+      await catalog.query('UPDATE laptops SET "userId" = $1 WHERE id = $2', [
+        2147483647,
+        owned.id,
+      ]);
+      const missing = success(
+        await request('GET', `/laptops/${owned.id}`),
+        200,
+      );
+      assert.equal(missing.owner, null);
+      assert.equal(missing.partial, true);
+      assert.equal(missing.ownerStatus, 'not_found');
     },
   );
   await t.test(
@@ -866,6 +890,7 @@ test('gateway HTTP → RabbitMQ → services', { timeout: 180000 }, async (t) =>
       failure(await request('GET', '/laptops'), 504);
       const elapsed = performance.now() - started;
       assert.ok(elapsed >= 4800 && elapsed < 6500);
+      failure(await request('GET', `/laptops/${laptop.id}`), 504);
       success(await request('GET', '/users', undefined, adminToken), 200);
       await delay(100);
       assert.equal((await channel.checkQueue(catalogQueue)).messageCount, 0);

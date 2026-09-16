@@ -34,13 +34,32 @@ export class LaptopsController {
       'catalog.laptops.findOne',
       params,
     );
-    const owner =
-      laptop.userId === null
-        ? null
-        : await this.rpc.user<OwnerSummary | null>('user.findOwner', {
-            id: laptop.userId,
-          });
-    return { ...laptop, owner };
+    if (laptop.userId === null) {
+      return {
+        ...laptop,
+        owner: null,
+        partial: false,
+        ownerStatus: 'unassigned',
+      };
+    }
+    try {
+      const owner = await this.rpc.user<OwnerSummary | null>('user.findOwner', {
+        id: laptop.userId,
+      });
+      return {
+        ...laptop,
+        owner,
+        partial: owner === null,
+        ownerStatus: owner ? 'available' : 'not_found',
+      };
+    } catch {
+      return {
+        ...laptop,
+        owner: null,
+        partial: true,
+        ownerStatus: 'unavailable',
+      };
+    }
   }
 
   @Post()

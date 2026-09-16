@@ -24,4 +24,6 @@ export interface LaptopDetails {
 
 export interface LaptopWithOwner extends LaptopDetails {
   owner: OwnerSummary | null;
+  partial: boolean;
+  ownerStatus: 'available' | 'unassigned' | 'not_found' | 'unavailable';
 }
