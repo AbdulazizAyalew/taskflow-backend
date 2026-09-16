@@ -3,6 +3,7 @@ import { MessagePattern, Payload } from '@nestjs/microservices';
 import { AuthService } from './auth/auth.service';
 import { LoginDto } from '@app/shared';
 import { RegisterDto } from '@app/shared';
+import { UserIdDto } from '@app/shared';
 import { AdminJwtGuard } from './auth/admin-jwt.guard';
 import { UsersService } from './users/users.service';
 
@@ -27,5 +28,10 @@ export class UserServiceController {
   @MessagePattern('user.findAll')
   findAll() {
     return this.usersService.findAll();
+  }
+
+  @MessagePattern('user.findOwner')
+  findOwner(@Payload() data: UserIdDto) {
+    return this.usersService.findOwner(data.id);
   }
 }

@@ -472,10 +472,13 @@ test('gateway HTTP → RabbitMQ → services', { timeout: 180000 }, async (t) =>
     },
   );
   await t.test('findOne forwards path IDs and maps catalog 404s', async () => {
-    assert.equal(
-      success(await request('GET', `/laptops/${laptop.id}`), 200).id,
-      laptop.id,
-    );
+    const details = success(await request('GET', `/laptops/${laptop.id}`), 200);
+    assert.equal(details.id, laptop.id);
+    assert.equal(details.description, laptop.description);
+    assert.deepEqual(details.owner, {
+      id: owner.id,
+      username: ownerCredentials.username,
+    });
     failure(await request('GET', '/laptops/999999'), 404);
     failure(await request('GET', '/laptops/not-a-number'), 400);
   });
@@ -540,6 +543,12 @@ test('gateway HTTP → RabbitMQ → services', { timeout: 180000 }, async (t) =>
         'New Shop and initial Laptop have been created successfully!',
       );
       [shop] = success(await request('GET', '/shops'), 200);
+      const ownerless = success(
+        await request('GET', `/laptops/${shop.laptops[0].id}`),
+        200,
+      );
+      assert.equal(ownerless.userId, null);
+      assert.equal(ownerless.owner, null);
       const linked = success(
         await request('POST', `/shops/${shop.id}/laptops/${laptop.id}`),
         201,

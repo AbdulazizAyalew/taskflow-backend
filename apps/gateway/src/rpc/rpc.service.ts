@@ -19,18 +19,18 @@ export class RpcService {
     @Inject(CATALOG_CLIENT) private readonly catalog: ClientProxy,
   ) {}
 
-  user(pattern: string, data: unknown) {
-    return this.request(this.users, pattern, data);
+  user<T = unknown>(pattern: string, data: unknown): Promise<T> {
+    return this.request<T>(this.users, pattern, data);
   }
-  catalogRequest(pattern: string, data: unknown) {
-    return this.request(this.catalog, pattern, data);
+  catalogRequest<T = unknown>(pattern: string, data: unknown): Promise<T> {
+    return this.request<T>(this.catalog, pattern, data);
   }
 
-  private async request(
+  private async request<T>(
     client: ClientProxy,
     pattern: string,
     data: unknown,
-  ): Promise<unknown> {
+  ): Promise<T> {
     // Expire queued requests as well as bounding the HTTP wait. This cannot cancel
     // a write already delivered to a service. There is intentionally no retry().
     const message = new RmqRecordBuilder(data)
@@ -38,9 +38,7 @@ export class RpcService {
       .build();
     try {
       return await firstValueFrom(
-        client
-          .send<unknown>(pattern, message)
-          .pipe(timeout(REQUEST_TIMEOUT_MS)),
+        client.send<T>(pattern, message).pipe(timeout(REQUEST_TIMEOUT_MS)),
       );
     } catch (error: unknown) {
       if (error instanceof TimeoutError) {

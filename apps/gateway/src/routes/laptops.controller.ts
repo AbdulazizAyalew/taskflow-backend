@@ -11,6 +11,7 @@ import {
 } from '@nestjs/common';
 import { RpcService } from '../rpc/rpc.service';
 import { bearerToken } from '../http/bearer-token';
+import type { LaptopDetails, LaptopWithOwner, OwnerSummary } from '@app/shared';
 import {
   CreateLaptopDto,
   UpdateLaptopDto,
@@ -28,8 +29,18 @@ export class LaptopsController {
   }
 
   @Get(':id')
-  findOne(@Param() params: LaptopIdDto) {
-    return this.rpc.catalogRequest('catalog.laptops.findOne', params);
+  async findOne(@Param() params: LaptopIdDto): Promise<LaptopWithOwner> {
+    const laptop = await this.rpc.catalogRequest<LaptopDetails>(
+      'catalog.laptops.findOne',
+      params,
+    );
+    const owner =
+      laptop.userId === null
+        ? null
+        : await this.rpc.user<OwnerSummary | null>('user.findOwner', {
+            id: laptop.userId,
+          });
+    return { ...laptop, owner };
   }
 
   @Post()
