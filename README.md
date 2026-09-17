@@ -42,6 +42,46 @@ The old application remains in `apps/taskflow-backend` as a migration reference.
 The default `npm start` and `npm run start:dev` still target that monolith.
 Use the explicit service commands below for the microservices architecture.
 
+## Shared DTO library
+
+The local Nest library [libs/shared](libs/shared/README.md) is imported as
+`@app/shared`. It provides auth, laptop and shop validation classes, RabbitMQ
+request envelopes, user roles, JWT types, notification event types, and the
+`LaptopWithOwner` response contract. Gateway and service controllers use the same
+runtime DTO classes, preserving validation rules without copying definitions.
+No npm publication is needed; TypeScript/Nest aliases and Jest mappings resolve
+the library locally. Database entities and business logic stay in their owning
+services. The historical monolith remains separate.
+
+## Laptop details aggregation and partial responses
+
+`GET /laptops/:id` is public and combines two service responses. The gateway first
+requests `catalog.laptops.findOne`, then uses its `userId` to request
+`user.findOwner`. That lookup returns only the owner's ID and username, never a
+password or role. The original laptop fields remain in `data`, with three added
+fields: `owner`, `partial`, and `ownerStatus`.
+
+| Owner lookup outcome | `owner` | `partial` | `ownerStatus` |
+| --- | --- | --- | --- |
+| User found | `{ id, username }` | `false` | `available` |
+| Laptop has no owner | `null` | `false` | `unassigned` |
+| Referenced user does not exist | `null` | `true` | `not_found` |
+| Lookup fails or times out | `null` | `true` | `unavailable` |
+
+These outcomes return HTTP 200 with the normal `success: true` wrapper. Clients
+should inspect `data.partial` and `data.ownerStatus` before displaying owner
+information. Ownerless laptops skip the user-service call. Catalog is required:
+missing laptops return 404, and catalog failures still return errors.
+
+Every gateway RabbitMQ call has a five-second timeout and queued-message expiry.
+Required calls that time out return a clean 504; connection failures return 503.
+An owner lookup failure instead returns the partial response above, without
+exposing the internal error. The timeout is per service call, not an overall
+HTTP deadline: the two sequential aggregation calls can together take roughly
+ten seconds. Calls are not automatically retried, and a timeout cannot cancel a
+write already being processed. Subsequent requests perform a fresh owner lookup,
+so owner information returns when user-service recovers.
+
 ## Quick start
 
 Prerequisites: Node.js with npm, Docker with Docker Compose, and curl. Commands
@@ -513,6 +553,30 @@ curl -X GET "http://localhost:3000/laptops?brand=Apple&minPrice=50000&maxPrice=2
 ```bash
 curl -X GET 'http://localhost:3000/laptops/<laptop_id>'
 ```
+
+Example with a resolved owner:
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": 1,
+    "userId": 2,
+    "description": "Brand new Dell",
+    "brand": "Dell XPS 15",
+    "ram": 32,
+    "price": 180000,
+    "owner": { "id": 2, "username": "testuser" },
+    "partial": false,
+    "ownerStatus": "available"
+  },
+  "timestamp": "2026-09-17T00:00:00.000Z"
+}
+```
+
+If user-service is unavailable, the laptop fields are still returned with
+`owner: null`, `partial: true`, and `ownerStatus: "unavailable"`. See
+[aggregation behavior](#laptop-details-aggregation-and-partial-responses).
 
 ### Create a new laptop (Protected Route)
 Replace <your_token_here> with the JWT you received from the login route.

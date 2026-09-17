@@ -1,4 +1,4 @@
-# API gateway — Issue 4
+# API gateway
 
 The gateway is the public HTTP entry point on port 3000. It forwards requests to
 user-service and catalog-service through RabbitMQ using `ClientProxy.send()` and
@@ -16,6 +16,7 @@ In separate terminals, start:
 ```bash
 npm run start:user-service
 npm run start:catalog-service
+npm run start:notification-service
 npm run start:gateway
 ```
 
@@ -32,7 +33,7 @@ replies through Nest's reply mechanism, not either service's request queue.
 | `POST /auth/login`                      | `user.login`                 | 201            |
 | `GET /users`                            | `user.findAll`               | 200            |
 | `GET /laptops`                          | `catalog.laptops.findAll`    | 200            |
-| `GET /laptops/:id`                      | `catalog.laptops.findOne`    | 200            |
+| `GET /laptops/:id`                      | `catalog.laptops.findOne` then `user.findOwner` | 200 |
 | `POST /laptops`                         | `catalog.laptops.create`     | 201            |
 | `PATCH /laptops/:id`                    | `catalog.laptops.update`     | 200            |
 | `DELETE /laptops/:id`                   | `catalog.laptops.delete`     | 200            |
@@ -67,6 +68,27 @@ service that does not reply within five seconds produces 504. Outgoing messages
 also carry a five-second RabbitMQ expiry. There are no application-level retries.
 A timeout does not roll back or cancel a write already delivered to a service.
 
+## Shared contracts and aggregation
+
+Controllers import validation classes from `@app/shared` in
+[libs/shared](../../libs/shared/README.md). Runtime DTO imports preserve Nest's
+validation metadata; interfaces supply compile-time contracts without replacing
+runtime validation.
+
+`GET /laptops/:id` combines the catalog laptop with its owner's ID and username.
+It preserves the laptop fields and adds `owner`, `partial`, and `ownerStatus`.
+A found owner uses `available` and `partial: false`. A laptop with no owner skips
+the lookup and uses `unassigned`, `owner: null`, and `partial: false`.
+A missing user uses `not_found`; a failed or timed-out lookup uses `unavailable`.
+Both return `owner: null`, `partial: true`, and HTTP 200. Passwords and roles are
+not included in owner details. Catalog lookup errors remain HTTP errors.
+
+The five-second timeout applies separately to each call; aggregation makes two
+sequential calls and can take roughly ten seconds. Subsequent requests retry the
+lookup naturally, without caching a failed owner result. See the
+[root README](../../README.md#laptop-details-aggregation-and-partial-responses)
+for the complete response table.
+
 ## HTTP security and caching
 
 Helmet and CORS are enabled at the gateway. The existing Nest rate limiter allows
@@ -98,7 +120,7 @@ The login JWT is at `data.access_token`, matching the original global intercepto
 
 ## Verify
 
-Run `npm run test:microservices:e2e` (or `npm run test:gateway:e2e`) with the infrastructure running. It builds all three
+Run `npm run test:microservices:e2e` (or `npm run test:gateway:e2e`) with the infrastructure running. It builds all four
 apps, starts isolated service processes and an HTTP gateway on an available port,
 and uses curl to exercise the complete round trips. JSON fixtures for registration,
 laptop creation, and shop creation are read directly from the root README.
@@ -106,6 +128,7 @@ laptop creation, and shop creation are read directly from the root README.
 It checks every route, response wrapping, JWT forwarding, ownership and admin
 access, validation, CORS/Helmet, rate limiting, five-second timeouts, no automatic
 write retries, and broker failures. Temporary databases, RabbitMQ queues, and
-Redis prefixes are cleaned up; development data is not cleared. Issue 5 expands
-this suite with real 60-second cache expiry, shop transaction rollback, and Bull
-notification completion through the gateway. Allow about two minutes.
+Redis prefixes are cleaned up; development data is not cleared. The suite also
+checks real 60-second cache expiry, transaction rollback, notifications, owner
+aggregation, partial responses during user-service outages, missing and unassigned
+owners, and recovery after restart. Allow about two minutes.
