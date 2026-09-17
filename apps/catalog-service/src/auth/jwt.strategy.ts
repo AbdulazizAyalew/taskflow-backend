@@ -1,7 +1,7 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import { UserRole } from './authenticated-user';
-import type { AuthenticatedUser } from './authenticated-user';
+import { UserRole } from '@app/shared';
+import type { AuthenticatedUser, JwtPayload } from '@app/shared';
 
 @Injectable()
 export class JwtStrategy {
@@ -12,11 +12,7 @@ export class JwtStrategy {
       throw new UnauthorizedException('A valid token is required');
     }
     try {
-      const claims = await this.jwt.verifyAsync<{
-        sub?: number;
-        exp?: number;
-        role?: UserRole;
-      }>(token);
+      const claims = await this.jwt.verifyAsync<Partial<JwtPayload>>(token);
       if (
         !Number.isInteger(claims.sub) ||
         claims.sub! <= 0 ||

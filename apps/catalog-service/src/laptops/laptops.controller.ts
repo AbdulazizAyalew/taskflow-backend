@@ -7,10 +7,10 @@ import {
   LaptopIdDto,
   ListLaptopsDto,
   UpdateLaptopMessage,
-} from './dto/laptop-messages.dto';
+} from '@app/shared';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
-import type { AuthenticatedUser } from '../auth/authenticated-user';
+import type { AuthenticatedUser } from '@app/shared';
 
 @Controller()
 export class LaptopsController {

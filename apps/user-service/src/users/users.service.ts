@@ -1,8 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { User, UserRole } from './user.entity';
-import type { PublicUser } from './user.entity';
+import { User } from './user.entity';
+import { UserRole } from '@app/shared';
+import type { PublicUser } from '@app/shared';
+import type { OwnerSummary } from '@app/shared';
 
 @Injectable()
 export class UsersService {
@@ -32,5 +34,13 @@ export class UsersService {
     return this.users.find({
       select: { id: true, username: true, role: true },
     });
+  }
+
+  async findOwner(id: number): Promise<OwnerSummary | null> {
+    const user = await this.users.findOne({
+      where: { id },
+      select: { id: true, username: true },
+    });
+    return user ? { id: user.id, username: user.username } : null;
   }
 }

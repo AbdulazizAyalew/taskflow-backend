@@ -3,12 +3,7 @@ import { Ctx, EventPattern, Payload, RmqContext } from '@nestjs/microservices';
 import type { Channel, ConsumeMessage } from 'amqplib';
 import { RetryService } from './rabbitmq/retry.service';
 
-interface LaptopCreatedEvent {
-  laptopId: number;
-  userId: number | null;
-  brand: string;
-  simulateFailure?: boolean;
-}
+import type { LaptopCreatedEvent } from '@app/shared';
 
 @Controller()
 export class NotificationServiceController {

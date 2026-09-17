@@ -12,13 +12,9 @@ import { Between, LessThanOrEqual, MoreThanOrEqual, Repository } from 'typeorm';
 import type { FindOptionsWhere } from 'typeorm';
 import { Laptop } from './laptop.entity';
 import { LaptopCache } from './laptop-cache.service';
-import {
-  CreateLaptopDto,
-  ListLaptopsDto,
-  UpdateLaptopDto,
-} from './dto/laptop-messages.dto';
-import { UserRole } from '../auth/authenticated-user';
-import type { AuthenticatedUser } from '../auth/authenticated-user';
+import { CreateLaptopDto, ListLaptopsDto, UpdateLaptopDto } from '@app/shared';
+import { UserRole } from '@app/shared';
+import type { AuthenticatedUser, LaptopCreatedEvent } from '@app/shared';
 import {
   CATALOG_EVENTS_CLIENT,
   LAPTOP_CREATED_EVENT,
@@ -86,7 +82,7 @@ export class LaptopsService {
         laptopId: laptop.id,
         userId: laptop.userId,
         brand: laptop.brand,
-      })
+      } satisfies LaptopCreatedEvent)
       .subscribe({
         error: (error: unknown) =>
           this.logger.error('Could not emit laptop_created event', error),

@@ -11,12 +11,13 @@ import {
 } from '@nestjs/common';
 import { RpcService } from '../rpc/rpc.service';
 import { bearerToken } from '../http/bearer-token';
+import type { LaptopDetails, LaptopWithOwner, OwnerSummary } from '@app/shared';
 import {
   CreateLaptopDto,
   UpdateLaptopDto,
   ListLaptopsDto,
   LaptopIdDto,
-} from '../dto/catalog.dto';
+} from '@app/shared';
 
 @Controller('laptops')
 export class LaptopsController {
@@ -28,8 +29,37 @@ export class LaptopsController {
   }
 
   @Get(':id')
-  findOne(@Param() params: LaptopIdDto) {
-    return this.rpc.catalogRequest('catalog.laptops.findOne', params);
+  async findOne(@Param() params: LaptopIdDto): Promise<LaptopWithOwner> {
+    const laptop = await this.rpc.catalogRequest<LaptopDetails>(
+      'catalog.laptops.findOne',
+      params,
+    );
+    if (laptop.userId === null) {
+      return {
+        ...laptop,
+        owner: null,
+        partial: false,
+        ownerStatus: 'unassigned',
+      };
+    }
+    try {
+      const owner = await this.rpc.user<OwnerSummary | null>('user.findOwner', {
+        id: laptop.userId,
+      });
+      return {
+        ...laptop,
+        owner,
+        partial: owner === null,
+        ownerStatus: owner ? 'available' : 'not_found',
+      };
+    } catch {
+      return {
+        ...laptop,
+        owner: null,
+        partial: true,
+        ownerStatus: 'unavailable',
+      };
+    }
   }
 
   @Post()

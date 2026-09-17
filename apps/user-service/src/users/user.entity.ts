@@ -1,9 +1,6 @@
 import { Column, Entity, PrimaryGeneratedColumn } from 'typeorm';
 
-export enum UserRole {
-  USER = 'user',
-  ADMIN = 'admin',
-}
+import { UserRole } from '@app/shared';
 
 @Entity('users')
 export class User {
@@ -19,5 +16,3 @@ export class User {
   @Column({ type: 'enum', enum: UserRole, default: UserRole.USER })
   role: UserRole;
 }
-
-export type PublicUser = Pick<User, 'id' | 'username' | 'role'>;

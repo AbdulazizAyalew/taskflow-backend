@@ -93,6 +93,7 @@ test('gateway HTTP → RabbitMQ → services', { timeout: 180000 }, async (t) =>
     redis,
     notifications,
     catalogProcess,
+    userProcess,
     notificationOutput,
     origin;
 
@@ -209,12 +210,13 @@ test('gateway HTTP → RabbitMQ → services', { timeout: 180000 }, async (t) =>
     });
     return { child, address, getOutput: () => output };
   }
-  await start('user-service', {
+  const userServiceEnv = {
     ...userEnv,
     DB_DATABASE: userDb,
     DB_SYNCHRONIZE: 'true',
     RABBITMQ_QUEUE: userQueue,
-  });
+  };
+  ({ child: userProcess } = await start('user-service', userServiceEnv));
   ({ getOutput: notificationOutput } = await start('notification-service', {
     RABBITMQ_URL: userEnv.RABBITMQ_URL,
     RABBITMQ_QUEUE: notificationQueue,
@@ -472,10 +474,13 @@ test('gateway HTTP → RabbitMQ → services', { timeout: 180000 }, async (t) =>
     },
   );
   await t.test('findOne forwards path IDs and maps catalog 404s', async () => {
-    assert.equal(
-      success(await request('GET', `/laptops/${laptop.id}`), 200).id,
-      laptop.id,
-    );
+    const details = success(await request('GET', `/laptops/${laptop.id}`), 200);
+    assert.equal(details.id, laptop.id);
+    assert.equal(details.description, laptop.description);
+    assert.deepEqual(details.owner, {
+      id: owner.id,
+      username: ownerCredentials.username,
+    });
     failure(await request('GET', '/laptops/999999'), 404);
     failure(await request('GET', '/laptops/not-a-number'), 400);
   });
@@ -540,6 +545,14 @@ test('gateway HTTP → RabbitMQ → services', { timeout: 180000 }, async (t) =>
         'New Shop and initial Laptop have been created successfully!',
       );
       [shop] = success(await request('GET', '/shops'), 200);
+      const ownerless = success(
+        await request('GET', `/laptops/${shop.laptops[0].id}`),
+        200,
+      );
+      assert.equal(ownerless.userId, null);
+      assert.equal(ownerless.owner, null);
+      assert.equal(ownerless.partial, false);
+      assert.equal(ownerless.ownerStatus, 'unassigned');
       const linked = success(
         await request('POST', `/shops/${shop.id}/laptops/${laptop.id}`),
         201,
@@ -815,6 +828,61 @@ test('gateway HTTP → RabbitMQ → services', { timeout: 180000 }, async (t) =>
     assert.ok(limited);
   });
   await t.test(
+    'user calls time out while laptop details return partial data and recover',
+    async () => {
+      const owned = success(
+        await request('POST', '/laptops', laptopData, ownerToken),
+        201,
+      );
+      await stop(userProcess);
+      try {
+        for (const path of ['/users', `/laptops/${owned.id}`]) {
+          const started = performance.now();
+          const response = await request('GET', path, undefined, adminToken);
+          if (path === '/users') {
+            failure(response, 504);
+            assert.equal(
+              response.body.message,
+              'Service did not respond within 5 seconds',
+            );
+          } else {
+            const details = success(response, 200);
+            assert.equal(details.id, owned.id);
+            assert.equal(details.description, owned.description);
+            assert.equal(details.owner, null);
+            assert.equal(details.partial, true);
+            assert.equal(details.ownerStatus, 'unavailable');
+          }
+          const elapsed = performance.now() - started;
+          assert.ok(elapsed >= 4800 && elapsed < 6500);
+        }
+        success(await request('GET', '/laptops'), 200);
+        await delay(100);
+        assert.equal((await channel.checkQueue(userQueue)).messageCount, 0);
+      } finally {
+        ({ child: userProcess } = await start('user-service', userServiceEnv));
+      }
+      const recovered = success(
+        await request('GET', `/laptops/${owned.id}`),
+        200,
+      );
+      assert.equal(recovered.owner.id, owner.id);
+      assert.equal(recovered.partial, false);
+      assert.equal(recovered.ownerStatus, 'available');
+      await catalog.query('UPDATE laptops SET "userId" = $1 WHERE id = $2', [
+        2147483647,
+        owned.id,
+      ]);
+      const missing = success(
+        await request('GET', `/laptops/${owned.id}`),
+        200,
+      );
+      assert.equal(missing.owner, null);
+      assert.equal(missing.partial, true);
+      assert.equal(missing.ownerStatus, 'not_found');
+    },
+  );
+  await t.test(
     'an offline catalog returns 504 within five seconds, while users still work',
     async () => {
       await stop(catalogProcess);
@@ -822,6 +890,7 @@ test('gateway HTTP → RabbitMQ → services', { timeout: 180000 }, async (t) =>
       failure(await request('GET', '/laptops'), 504);
       const elapsed = performance.now() - started;
       assert.ok(elapsed >= 4800 && elapsed < 6500);
+      failure(await request('GET', `/laptops/${laptop.id}`), 504);
       success(await request('GET', '/users', undefined, adminToken), 200);
       await delay(100);
       assert.equal((await channel.checkQueue(catalogQueue)).messageCount, 0);

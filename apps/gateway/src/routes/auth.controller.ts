@@ -1,7 +1,7 @@
 import { Body, Controller, Post } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { RpcService } from '../rpc/rpc.service';
-import { LoginDto, RegisterDto } from '../dto/auth.dto';
+import { LoginDto, RegisterDto } from '@app/shared';
 
 @Controller('auth')
 export class AuthController {

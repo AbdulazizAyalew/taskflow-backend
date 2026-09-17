@@ -1,10 +1,10 @@
 import { Body, Controller, Get, Param, Post } from '@nestjs/common';
 import { RpcService } from '../rpc/rpc.service';
 import {
-  CreateShopBody,
-  ShopLaptopParams,
-  ShopsByLaptopParams,
-} from '../dto/catalog.dto';
+  CreateShopMessage,
+  ShopLaptopMessage,
+  ShopsByLaptopMessage,
+} from '@app/shared';
 
 @Controller('shops')
 export class ShopsController {
@@ -16,17 +16,17 @@ export class ShopsController {
   }
 
   @Post()
-  create(@Body() body: CreateShopBody) {
+  create(@Body() body: CreateShopMessage) {
     return this.rpc.catalogRequest('catalog.shops.create', body);
   }
 
   @Post(':shopId/laptops/:laptopId')
-  addLaptop(@Param() params: ShopLaptopParams) {
+  addLaptop(@Param() params: ShopLaptopMessage) {
     return this.rpc.catalogRequest('catalog.shops.addLaptop', params);
   }
 
   @Get('laptop/:laptopId')
-  findByLaptop(@Param() params: ShopsByLaptopParams) {
+  findByLaptop(@Param() params: ShopsByLaptopMessage) {
     return this.rpc.catalogRequest('catalog.shops.findByLaptop', params);
   }
 }

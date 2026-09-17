@@ -5,7 +5,7 @@ import {
   CreateShopMessage,
   ShopLaptopMessage,
   ShopsByLaptopMessage,
-} from './dto/shop-messages.dto';
+} from '@app/shared';
 
 // Preserve existing public shop routes. Do not invent ownership rules in migration.
 @Controller()
